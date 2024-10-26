@@ -1,16 +1,24 @@
 pub const Token = union(enum) {
+    // Delimiters
     LeftParen,
     RightParen,
+    LeftBracket,
+    RightBracket,
+    LeftBrace,
+    RightBrace,
 
     // Literals
     Identifier: []const u8,
     Int: i64,
+
+    // Built-ins
+    Nil,
 
     EOF,
 };
 
 pub const TokenWithPosition = struct {
     token: Token,
-    line: usize = 1,
-    column: usize = 1,
+    line: usize,
+    column: usize,
 };
