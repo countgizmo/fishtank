@@ -13,6 +13,8 @@ pub const Token = union(enum) {
 
     // Built-ins
     Nil,
+    True,
+    False,
 
     EOF,
 };

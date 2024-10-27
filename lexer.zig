@@ -70,6 +70,12 @@ const Lexer = struct {
         var tokenType: Token = undefined;
         if (std.mem.eql(u8, text, "nil")) {
             tokenType = Token.Nil;
+        }
+        else if (std.mem.eql(u8, text, "true")) {
+            tokenType = Token.True;
+        }
+        else if (std.mem.eql(u8, text, "false")) {
+            tokenType = Token.False;
         } else {
             tokenType = Token{ .Identifier = text };
         }
