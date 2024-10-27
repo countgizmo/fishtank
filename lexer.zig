@@ -5,6 +5,10 @@ const token = @import("token.zig");
 const Token = token.Token;
 const TokenWithPosition  = token.TokenWithPosition;
 
+const LexerError = error {
+    UnexpectedCharacter,
+};
+
 const Lexer = struct {
     source: []const u8,
     cursor: usize,
@@ -30,6 +34,8 @@ const Lexer = struct {
                 else => {
                     if (std.ascii.isAlphabetic(c)) {
                         return self.lexIdentifierOrBuiltIn();
+                    } else {
+                        return LexerError.UnexpectedCharacter;
                     }
                 }
             }
