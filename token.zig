@@ -8,7 +8,7 @@ pub const Token = union(enum) {
     RightBrace,
 
     // Literals
-    Identifier: []const u8,
+    Symbol: []const u8,
     Int: i64,
 
     // Built-ins
