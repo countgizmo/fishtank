@@ -2,6 +2,7 @@ const std = @import("std");
 const ArrayList = std.ArrayList;
 const Allocator = std.mem.Allocator;
 const expect = std.testing.expect;
+const expectEqual = std.testing.expectEqual;
 const expectEqualStrings = std.testing.expectEqualStrings;
 const token = @import("token.zig");
 const Token = token.Token;
@@ -31,50 +32,84 @@ const Lexer = struct {
     pub fn getTokens(self: *Lexer) !ArrayList(TokenWithPosition)  {
         var tokens = ArrayList(TokenWithPosition).init(self.allocator);
 
-        while (true) {
-            if (self.nextToken()) |current_token| {
-                try tokens.append(current_token);
+        while (self.nextToken()) |current_token| {
+            if (current_token.token == .EOF) {
+                break;
+            }
 
-                if (current_token.token == .EOF) {
-                    break;
-                }
-            } else |err| switch (err) {
-                error.UnexpectedCharacter => {
-                    std.log.err("Unexpected token {}", .{token});
-                }
+            try tokens.append(current_token);
+        } else |err| switch (err) {
+            error.UnexpectedCharacter => {
+                tokens.deinit();
+                std.log.err("Unexpected token {c} at column {d} line {d}", .{self.source[self.cursor-1], self.column, self.line});
+                return err;
             }
         }
 
         return tokens;
     }
 
-    fn isValidSymbolCharacter(ch: u8) bool {
+    fn isSpecialSymbolCharacter(ch: u8) bool {
         switch(ch) {
             '.', '*', '+', '!', '-', '_', '?', '$', '%', '&', '=', '>', '<' => return true,
-            ':', '#' => return true,
-            '/' => return true,
             else => {
-                return std.ascii.isAlphanumeric(ch);
+                return false;
             }
         }
-
 
         return false;
     }
 
 
+    fn isValidSymbolCharacter(ch: u8) bool {
+        return isSpecialSymbolCharacter(ch)
+               or std.ascii.isAlphanumeric(ch)
+               or ch == ':'
+               or ch == '#'
+               or ch == '/';
+    }
+
     fn isSymbolBegins(self: Lexer, ch: u8) bool {
-        if (std.ascii.isAlphabetic(ch) or isValidSymbolCharacter(ch)) {
-            return true;
+        // If -, + or . are the first character, the second character (if any) must be non-numeric.
+        if ((ch == '-' or ch == '+' or ch == '.') ) {
+            if (std.ascii.isAlphabetic(self.peek()) or self.peek() == '>') {
+                return true;
+            } else {
+                return false;
+            }
         }
 
-        // If -, + or . are the first character, the second character (if any) must be non-numeric.
-        if ((ch == '-' or ch == '+' or ch == '.') and
-            std.ascii.isAlphabetic(self.peek())) {
+        if (std.ascii.isAlphabetic(ch) or isSpecialSymbolCharacter(ch)) {
             return true;
         }
 
         return false;
+    }
+
+    fn isValidNamespacedSymbol(maybe_symbol: TokenWithPosition) bool {
+        var slash_count: usize = 0;
+
+        switch (maybe_symbol.token) {
+            Token.Symbol => |value| {
+                if (value[value.len-1] == '/') {
+                    return false; // Cannot end with / (aka, suffix is missing)
+                }
+                for(value) |ch| {
+                    if (ch == '/') {
+                        slash_count += 1;
+                    }
+                }
+
+                if (slash_count > 1) {
+                    return false; //Cannot have more than 1 /
+                }
+
+                return true;
+            },
+            else => {
+                return true;
+            }
+        }
     }
 
     pub fn nextToken(self: *Lexer) !TokenWithPosition {
@@ -86,7 +121,11 @@ const Lexer = struct {
                 ')' => return self.makeToken(.RightParen),
                 else => {
                     if (self.isSymbolBegins(c)) {
-                        return self.lexSymbolOrBuiltIn();
+                        const maybe_symbol = self.lexSymbolOrBuiltIn();
+                        if (isValidNamespacedSymbol(maybe_symbol)) {
+                            return maybe_symbol;
+                        }
+                        return LexerError.UnexpectedCharacter;
                     } else {
                         return LexerError.UnexpectedCharacter;
                     }
@@ -213,4 +252,37 @@ test "tokenize valid symbols" {
             }
         }
     }
+}
+
+test "tokenize invalid symbols" {
+    const invalid_symbols = [_][]const u8{
+        "123abc",
+        "1name",
+        "+1thing",
+        "-3value",
+        ".4symbol",
+        "/foo",
+        "foo/",
+        "ns/foo/bar",
+        "foo@bar",
+        "foo~bar",
+        ":keyword",
+        "#something",
+    };
+
+    var errors_count: usize = 0;
+
+    for (invalid_symbols) |invalid_symbol| {
+        var lexer = Lexer.init(std.testing.allocator, invalid_symbol);
+
+        var tokens = lexer.getTokens() catch |err| {
+            try std.testing.expect(err == LexerError.UnexpectedCharacter);
+            errors_count += 1;
+            return;
+        };
+
+        tokens.deinit();
+    }
+
+    try expectEqual(invalid_symbols.len, errors_count);
 }
