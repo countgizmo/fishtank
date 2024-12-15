@@ -219,7 +219,7 @@ test "tokenize simple form" {
     }
 }
 
-test "tokenize valid symbols" {
+test "tokenize basic valid symbols" {
     const basic_symbols = "foo my-symbol *special* +positive !important ends-with? ->fn $price %complete foo$bar% <symbol>";
 
     var lexer = Lexer.init(std.testing.allocator, basic_symbols);
@@ -249,6 +249,66 @@ test "tokenize valid symbols" {
             },
             else  => {
                 try std.testing.expectEqual(expected_tokens[idx], actual_token);
+            }
+        }
+    }
+}
+
+test "tokenize valid symbols with special chars" {
+    const valid_symbols = "foo.bar,foo+bar,foo-bar,foo_baz,equals=to,greater<than>,hash#key";
+
+    var lexer = Lexer.init(std.testing.allocator, valid_symbols);
+    var tokens = try lexer.getTokens();
+    defer tokens.deinit();
+
+    const expected_tokens = [_]TokenWithPosition{
+        TokenWithPosition{ .token = .{ .Symbol = "foo.bar" }, .column = 1, .line = 1 },
+        TokenWithPosition{ .token = .{ .Symbol = "foo+bar" }, .column = 9, .line = 1 },
+        TokenWithPosition{ .token = .{ .Symbol = "foo-bar" }, .column = 17, .line = 1 },
+        TokenWithPosition{ .token = .{ .Symbol = "foo_baz" }, .column = 25, .line = 1 },
+        TokenWithPosition{ .token = .{ .Symbol = "equals=to" }, .column = 33, .line = 1 },
+        TokenWithPosition{ .token = .{ .Symbol = "greater<than>" }, .column = 43, .line = 1 },
+        TokenWithPosition{ .token = .{ .Symbol = "hash#key" }, .column = 57, .line = 1 },
+        TokenWithPosition{ .token = .EOF, .column = 65, .line = 1 },
+    };
+
+    for (tokens.items, 0..) |actual_token, idx| {
+        switch (actual_token.token) {
+            Token.Symbol => |value| {
+                try expectEqualStrings(expected_tokens[idx].token.Symbol, value);
+                try expect(expected_tokens[idx].column == actual_token.column);
+            },
+            else  => {
+                try std.testing.expectEqual(expected_tokens[idx], actual_token);
+            }
+        }
+    }
+}
+
+test "tokenize valid namespaced symbols" {
+    const valid_symbols = "my-namespace/foo,core.logic/fact,user/!,valid/namespace-name,math/+";
+
+    var lexer = Lexer.init(std.testing.allocator, valid_symbols);
+    var tokens = try lexer.getTokens();
+    defer tokens.deinit();
+
+    const expected_tokens = [_]TokenWithPosition{
+        TokenWithPosition{ .token = .{ .Symbol = "my-namespace/foo" }, .column = 1, .line = 1 },
+        TokenWithPosition{ .token = .{ .Symbol = "core.logic/fact" }, .column = 18, .line = 1 },
+        TokenWithPosition{ .token = .{ .Symbol = "user/!" }, .column = 34, .line = 1 },
+        TokenWithPosition{ .token = .{ .Symbol = "valid/namespace-name" }, .column = 41, .line = 1 },
+        TokenWithPosition{ .token = .{ .Symbol = "math/+" }, .column = 62, .line = 1 },
+        TokenWithPosition{ .token = .EOF, .column = 67, .line = 1 },
+    };
+
+    for (tokens.items, 0..) |actual_token, idx| {
+        switch (actual_token.token) {
+            Token.Symbol => |value| {
+                try expectEqualStrings(expected_tokens[idx].token.Symbol, value);
+                try expectEqual(expected_tokens[idx].column, actual_token.column);
+            },
+            else  => {
+                try expectEqual(expected_tokens[idx], actual_token);
             }
         }
     }
