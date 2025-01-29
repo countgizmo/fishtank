@@ -82,6 +82,29 @@ pub const Expression = struct {
                     .column = token.column,
                 },
             },
+            .Symbol => Expression {
+                .kind = kind,
+                .value = .{
+                    .symbol = switch(token.token) {
+                        .Symbol => |s| s,
+                        else => return ParseError.UnexpectedToken,
+                    },
+                },
+                .position = .{
+                    .line = token.line,
+                    .column = token.column,
+                },
+            },
+            .Literal => Expression {
+                .kind = kind,
+                .value = .{
+                    .literal = token.token,
+                },
+                .position = .{
+                    .line = token.line,
+                    .column = token.column,
+                },
+            },
         };
     }
 
@@ -110,25 +133,72 @@ pub const Parser = struct {
     current: usize,
     tokens: []const TokenWithPosition,
 
-    pub fn init(allocator: Allocator) Parser {
+    pub fn init(allocator: Allocator, tokens: []const TokenWithPosition) Parser {
         return Parser{
             .current = 0,
             .allocator = allocator,
-            .tokens =  &[_]TokenWithPosition{},
+            .tokens =  tokens,
         };
     }
 
-    pub fn parse(self: *Parser, file_path: []const u8, tokens: []const TokenWithPosition) !Module {
-        if (tokens.len == 0) {
+    pub fn parse(self: *Parser, file_path: []const u8) !Module {
+        if (self.tokens.len == 0) {
             return ParseError.UnexpectedEOF;
         }
-
-        self.tokens = tokens;
 
         var module = try Module.init(self.allocator, file_path);
         errdefer module.deinit();
 
+        while (self.peek()) |current_token | {
+            switch (current_token.token) {
+                .EOF => break,
+                else => {
+                    const expression = try self.parseExpression();
+                    try module.addExpression(expression);
+                },
+            }
+        }
+
         return module;
+    }
+
+    fn parseExpression(self: *Parser) ParseError!Expression {
+        const current_token = self.peek() orelse return ParseError.UnexpectedToken;
+
+        return switch (current_token.token) {
+            .LeftParen => self.parseList(),
+            .Symbol => blk: {
+                _ = self.advance();
+                break :blk try Expression.create(self.allocator, .Symbol, current_token);
+            },
+            .Int => blk: {
+                _ = self.advance();
+                break :blk try Expression.create(self.allocator, .Literal, current_token);
+            },
+            else => ParseError.UnexpectedToken,
+        };
+    }
+
+    fn parseList(self: *Parser) ParseError!Expression {
+        const left_paren = self.advance() orelse return ParseError.UnexpectedEOF;
+        var list_expression = try Expression.create(self.allocator, .List, left_paren);
+        errdefer list_expression.deinit();
+
+        while (self.peek()) |current_token| {
+            switch (current_token.token) {
+                .RightParen => {
+                    _ = self.advance();
+                    return list_expression;
+                },
+                .EOF => return ParseError.UnbalancedParentheses,
+                else => {
+                    const expression = try self.parseExpression();
+                    try list_expression.value.list.append(expression);
+                },
+            }
+        }
+
+        return ParseError.UnexpectedEOF;
     }
 
     fn peek(self: Parser) ?TokenWithPosition {
@@ -139,7 +209,7 @@ pub const Parser = struct {
         return self.tokens[self.current];
     }
 
-    fn advance(self: Parser) ?TokenWithPosition {
+    fn advance(self: *Parser) ?TokenWithPosition {
         if (self.current >= self.tokens.len) {
             return null;
         }
@@ -170,30 +240,26 @@ test "parse namespace with multiple expressions" {
         .{ .token = .EOF, .line = 4, .column = 1 },
     };
 
-    var parser = Parser.init(testing.allocator);
-    var result = try parser.parse("test_file.clj", &tokens);
+    var parser = Parser.init(testing.allocator, &tokens);
+    var result = try parser.parse("test_file.clj");
     defer result.deinit();
 
-    // Check that we got a module
+    // Check that we got a module with 2 expressions
     try testing.expectEqualStrings(result.file_path, "test_file.clj");
-    // try testing.expectEqual(result.expressions.items.len, 2);
+    try testing.expectEqual(result.expressions.items.len, 2);
 
+    // Check the ns expression
+    const ns_expr = result.expressions.items[0];
+    try testing.expectEqual(ns_expr.kind, .List);
+    try testing.expectEqual(ns_expr.value.list.items.len, 2);
+    try testing.expectEqualStrings(ns_expr.value.list.items[0].value.symbol, "ns");
+    try testing.expectEqualStrings(ns_expr.value.list.items[1].value.symbol, "my-namespace");
 
-    // // Check that we have two top-level expressions
-    // try testing.expectEqual(result.value.module.items.len, 2);
-    //
-    // // Check the ns expression
-    // const ns_expr = result.value.module.items[0];
-    // try testing.expectEqual(ns_expr.kind, .List);
-    // try testing.expectEqual(ns_expr.value.list.items.len, 2);
-    // try testing.expectEqualStrings(ns_expr.value.list.items[0].value.symbol, "ns");
-    // try testing.expectEqualStrings(ns_expr.value.list.items[1].value.symbol, "my-namespace");
-    //
-    // // Check the def expression
-    // const def_expr = result.value.module.items[1];
-    // try testing.expectEqual(def_expr.kind, .List);
-    // try testing.expectEqual(def_expr.value.list.items.len, 3);
-    // try testing.expectEqualStrings(def_expr.value.list.items[0].value.symbol, "def");
-    // try testing.expectEqualStrings(def_expr.value.list.items[1].value.symbol, "x");
-    // try testing.expectEqual(def_expr.value.list.items[2].value.literal, Token{ .Int = 42 });
+    // Check the def expression
+    const def_expr = result.expressions.items[1];
+    try testing.expectEqual(def_expr.kind, .List);
+    try testing.expectEqual(def_expr.value.list.items.len, 3);
+    try testing.expectEqualStrings(def_expr.value.list.items[0].value.symbol, "def");
+    try testing.expectEqualStrings(def_expr.value.list.items[1].value.symbol, "x");
+    try testing.expectEqual(def_expr.value.list.items[2].value.literal, Token{ .Int = 42 });
 }
