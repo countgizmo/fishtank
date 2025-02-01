@@ -1,0 +1,10 @@
+.{
+    .name = "fishtan/k",
+    .version = "0.1.0",
+    .dependencies = .{
+        .raylib = .{
+            .path = "libs/raylib",  // Assuming raylib is in libs/raylib
+        },
+    },
+    .paths = .{""},
+}
