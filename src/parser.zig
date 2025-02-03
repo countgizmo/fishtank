@@ -30,7 +30,7 @@ pub const Module = struct {
 
     pub fn init(allocator: Allocator, file_path: []const u8) !Module {
         return Module{
-            .name = file_path, //TODO(evgheni): extract the file name only or the ns name
+            .name = "",
             .file_path = file_path,
             .expressions = ArrayList(Expression).init(allocator),
         };
@@ -141,6 +141,14 @@ pub const Parser = struct {
         };
     }
 
+    fn isNs(expression: Expression) bool {
+        if (expression.kind == .List) {
+            return std.mem.eql(u8, "ns", expression.value.list.items[0].value.symbol);
+        }
+
+        return false;
+    }
+
     pub fn parse(self: *Parser, file_path: []const u8) !Module {
         if (self.tokens.len == 0) {
             return ParseError.UnexpectedEOF;
@@ -154,6 +162,9 @@ pub const Parser = struct {
                 .EOF => break,
                 else => {
                     const expression = try self.parseExpression();
+                    if (std.mem.eql(u8, module.name, "") and isNs(expression)) {
+                        module.name = expression.value.list.items[1].value.symbol;
+                    }
                     try module.addExpression(expression);
                 },
             }
@@ -243,6 +254,9 @@ test "parse namespace with multiple expressions" {
     var parser = Parser.init(testing.allocator, &tokens);
     var result = try parser.parse("test_file.clj");
     defer result.deinit();
+
+    // Check module's name
+    try testing.expectEqualStrings("my-namespace", result.name);
 
     // Check that we got a module with 2 expressions
     try testing.expectEqualStrings(result.file_path, "test_file.clj");
