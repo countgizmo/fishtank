@@ -12,7 +12,7 @@ const LexerError = error {
     UnexpectedCharacter,
 };
 
-const Lexer = struct {
+pub const Lexer = struct {
     allocator: Allocator,
     source: []const u8,
     cursor: usize,
