@@ -16,17 +16,23 @@ const LexerError = error {
 pub const Lexer = struct {
     allocator: Allocator,
     source: []const u8,
-    cursor: usize,
-    line: usize,
-    column: usize,
+    cursor: usize = 0,
+    line: usize = 1,
+    column: usize = 0,
+    quiet: bool = false,
 
     pub fn init(allocator: Allocator, source: []const u8) Lexer {
-        return Lexer{
+        return .{
             .allocator = allocator,
             .source = source,
-            .cursor = 0,
-            .line = 1,
-            .column = 0,
+        };
+    }
+
+    pub fn initQuiet(allocator: Allocator, source: []const u8) Lexer {
+        return .{
+            .allocator = allocator,
+            .source = source,
+            .quiet = true,
         };
     }
 
@@ -42,7 +48,9 @@ pub const Lexer = struct {
         } else |err| switch (err) {
             error.UnexpectedCharacter => {
                 tokens.deinit();
-                std.log.err("Unexpected token {c} at column {d} line {d}", .{self.source[self.cursor-1], self.column, self.line});
+                if (!self.quiet) {
+                    std.log.err("Unexpected token {c} at column {d} line {d}", .{self.source[self.cursor-1], self.column, self.line});
+                }
                 return err;
             }
         }
