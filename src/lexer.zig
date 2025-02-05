@@ -1,6 +1,7 @@
 const std = @import("std");
 const ArrayList = std.ArrayList;
 const Allocator = std.mem.Allocator;
+const testing = std.testing;
 const expect = std.testing.expect;
 const expectEqual = std.testing.expectEqual;
 const expectEqualStrings = std.testing.expectEqualStrings;
@@ -112,6 +113,10 @@ pub const Lexer = struct {
         }
     }
 
+    fn isKeywordBegins(ch: u8) bool {
+        return ch == ':';
+    }
+
     pub fn nextToken(self: *Lexer) !TokenWithPosition {
         while (self.cursor < self.source.len) {
             const c = self.advance();
@@ -126,6 +131,9 @@ pub const Lexer = struct {
                             return maybe_symbol;
                         }
                         return LexerError.UnexpectedCharacter;
+                    } else if (isKeywordBegins(c)) {
+                        const maybe_keyword = self.lexKeyword();
+                        return maybe_keyword;
                     } else {
                         return LexerError.UnexpectedCharacter;
                     }
@@ -180,7 +188,23 @@ pub const Lexer = struct {
         return TokenWithPosition{
             .token = tokenType,
             .line = self.line,
-            .column = start+1,
+            .column = start + 1,
+        };
+    }
+
+    fn lexKeyword(self: *Lexer) TokenWithPosition {
+        const start = self.cursor - 1;
+
+        while (self.cursor < self.source.len and isValidSymbolCharacter(self.source[self.cursor])) {
+            _ = self.advance();
+        }
+
+        const text = self.source[start..self.cursor];
+
+        return TokenWithPosition{
+            .token = Token{ .Keyword = text },
+            .line = self.line,
+            .column = start + 1,
         };
     }
 };
@@ -326,23 +350,62 @@ test "tokenize invalid symbols" {
         "ns/foo/bar",
         "foo@bar",
         "foo~bar",
-        ":keyword",
         "#something",
     };
 
-    var errors_count: usize = 0;
-
     for (invalid_symbols) |invalid_symbol| {
-        var lexer = Lexer.init(std.testing.allocator, invalid_symbol);
-
-        var tokens = lexer.getTokens() catch |err| {
-            try std.testing.expect(err == LexerError.UnexpectedCharacter);
-            errors_count += 1;
-            return;
-        };
-
-        tokens.deinit();
+        var lexer = Lexer.initQuiet(std.testing.allocator, invalid_symbol);
+        try std.testing.expectError(
+            LexerError.UnexpectedCharacter,
+            lexer.getTokens()
+        );
     }
+}
 
-    try expectEqual(invalid_symbols.len, errors_count);
+test "lexer - basic keywords" {
+    const source = ":foo :bar";
+    var l = Lexer.init(testing.allocator, source);
+
+    const expected_tokens = [_]TokenWithPosition{
+        .{ .token = .{ .Keyword = ":foo" }, .column = 1, .line = 1 },
+        .{ .token = .{ .Keyword = ":bar" }, .column = 6, .line = 1 },
+        .{ .token = .EOF, .column = 9, .line = 1 },
+    };
+
+    const tokens = try l.getTokens();
+    defer tokens.deinit();
+
+    for (tokens.items, 0..) |actual_token, idx| {
+        switch (actual_token.token) {
+            .Keyword => |value| {
+                try expectEqualStrings(expected_tokens[idx].token.Keyword, value);
+                try expectEqual(expected_tokens[idx].column, actual_token.column);
+            },
+            else => try expectEqual(expected_tokens[idx], actual_token),
+        }
+    }
+}
+
+test "lexer - namespaced keywords" {
+    const source = ":my/foo :other.ns/bar";
+    var l = Lexer.init(testing.allocator, source);
+
+    const expected_tokens = [_]TokenWithPosition{
+        .{ .token = .{ .Keyword = ":my/foo" }, .column = 1, .line = 1 },
+        .{ .token = .{ .Keyword = ":other.ns/bar" }, .column = 9, .line = 1 },
+        .{ .token = .EOF, .column = 21, .line = 1 },
+    };
+
+    const tokens = try l.getTokens();
+    defer tokens.deinit();
+
+    for (tokens.items, 0..) |actual_token, idx| {
+        switch (actual_token.token) {
+            .Keyword => |value| {
+                try expectEqualStrings(expected_tokens[idx].token.Keyword, value);
+                try expectEqual(expected_tokens[idx].column, actual_token.column);
+            },
+            else => try expectEqual(expected_tokens[idx], actual_token),
+        }
+    }
 }
