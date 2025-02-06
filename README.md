@@ -1,3 +1,4 @@
 ## Fishtank
 
-Parsing Clojure in using Zig for fun.
+Parsing Clojure using Zig for fun.
+Trying different way to visualize code.
