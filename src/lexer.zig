@@ -132,6 +132,8 @@ pub const Lexer = struct {
                 ' ', ',', ';' => continue,
                 '(' => return self.makeToken(.LeftParen),
                 ')' => return self.makeToken(.RightParen),
+                '[' => return self.makeToken(.LeftBracket),
+                ']' => return self.makeToken(.RightBracket),
                 else => {
                     if (self.isSymbolBegins(c)) {
                         const maybe_symbol = self.lexSymbolOrBuiltIn();
@@ -226,7 +228,7 @@ test "init lexer" {
 }
 
 test "tokenize simple form" {
-    const source = "(def s nil)";
+    const source = "(def s [nil])";
 
     var lexer = Lexer.init(std.testing.allocator, source);
     var tokens = try lexer.getTokens();
@@ -236,9 +238,11 @@ test "tokenize simple form" {
         TokenWithPosition{ .token = .LeftParen, .column = 1, .line = 1 },
         TokenWithPosition{ .token = .{ .Symbol = "def"}, .column = 3, .line = 1 },
         TokenWithPosition{ .token = .{ .Symbol = "s"}, .column = 6, .line = 1 },
-        TokenWithPosition{ .token = .Nil, .column = 8, .line = 1 },
-        TokenWithPosition{ .token = .RightParen, .column = 11, .line = 1 },
-        TokenWithPosition{ .token = .EOF, .column = 11, .line = 1 }
+        TokenWithPosition{ .token = .LeftBracket, .column = 8, .line = 1 },
+        TokenWithPosition{ .token = .Nil, .column = 9, .line = 1 },
+        TokenWithPosition{ .token = .RightBracket, .column = 12, .line = 1 },
+        TokenWithPosition{ .token = .RightParen, .column = 13, .line = 1 },
+        TokenWithPosition{ .token = .EOF, .column = 14, .line = 1 }
     };
 
     for (tokens.items, 0..) |actual_token, idx| {
