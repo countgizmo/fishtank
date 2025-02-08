@@ -1,4 +1,5 @@
 const std = @import("std");
+const testing = std.testing;
 const ArrayList = std.ArrayList;
 const Allocator = std.mem.Allocator;
 const token_module = @import("token.zig");
@@ -53,7 +54,8 @@ pub const Module = struct {
 const ExpressionKind = enum {
     List,
     Symbol,
-    Literal
+    Literal,
+    Vector
 };
 
 pub const Expression = struct {
@@ -63,6 +65,7 @@ pub const Expression = struct {
         list: ArrayList(Expression),
         symbol: []const u8,
         literal: Token,
+        vector: ArrayList(Expression),
     },
 
     position: struct {
@@ -105,6 +108,16 @@ pub const Expression = struct {
                     .column = token.column,
                 },
             },
+            .Vector => Expression {
+                .kind = kind,
+                .value = .{
+                    .vector = ArrayList(Expression).init(allocator),
+                },
+                .position = .{
+                    .line = token.line,
+                    .column = token.column,
+                },
+            },
         };
     }
 
@@ -115,6 +128,12 @@ pub const Expression = struct {
                     expr.deinit();
                 }
                 self.value.list.deinit();
+            },
+            .Vector => {
+                for (self.value.vector.items) |*expr| {
+                    expr.deinit();
+                }
+                self.value.vector.deinit();
             },
             else => {}, // Other types don't own memory
         }
@@ -178,6 +197,7 @@ pub const Parser = struct {
 
         return switch (current_token.token) {
             .LeftParen => self.parseList(),
+            .LeftBracket => self.parseVector(),
             .Symbol => blk: {
                 _ = self.advance();
                 break :blk try Expression.create(self.allocator, .Symbol, current_token);
@@ -212,6 +232,28 @@ pub const Parser = struct {
         return ParseError.UnexpectedEOF;
     }
 
+    fn parseVector(self: *Parser) ParseError!Expression {
+        const left_bracket = self.advance() orelse return ParseError.UnexpectedEOF;
+        var list_expression = try Expression.create(self.allocator, .Vector, left_bracket);
+        errdefer list_expression.deinit();
+
+        while (self.peek()) |current_token| {
+            switch (current_token.token) {
+                .RightBracket => {
+                    _ = self.advance();
+                    return list_expression;
+                },
+                .EOF => return ParseError.UnbalancedParentheses,
+                else => {
+                    const expression = try self.parseExpression();
+                    try list_expression.value.vector.append(expression);
+                },
+            }
+        }
+
+        return ParseError.UnexpectedEOF;
+    }
+
     fn peek(self: Parser) ?TokenWithPosition {
         if (self.current >= self.tokens.len) {
             return null;
@@ -233,7 +275,6 @@ pub const Parser = struct {
 
 
 test "parse namespace with multiple expressions" {
-    const testing = std.testing;
     const tokens = [_]TokenWithPosition{
         // (ns my-namespace)
         .{ .token = .LeftParen, .line = 1, .column = 1 },
@@ -276,4 +317,26 @@ test "parse namespace with multiple expressions" {
     try testing.expectEqualStrings(def_expr.value.list.items[0].value.symbol, "def");
     try testing.expectEqualStrings(def_expr.value.list.items[1].value.symbol, "x");
     try testing.expectEqual(def_expr.value.list.items[2].value.literal, Token{ .Int = 42 });
+}
+
+test "parse a simple vector" {
+    const tokens = [_]TokenWithPosition{
+        // [my-fun 2]
+        .{ .token = .LeftBracket, .line = 1, .column = 1 },
+        .{ .token = .{ .Symbol = "my-fun" }, .line = 1, .column = 2 },
+        .{ .token = .{ .Int = 2 }, .line = 1, .column = 9 },
+        .{ .token = .RightBracket, .line = 1, .column = 10 },
+
+        .{ .token = .EOF, .line = 2, .column = 1 },
+    };
+
+    var parser = Parser.init(testing.allocator, &tokens);
+    var result = try parser.parse("test_file.clj");
+    defer result.deinit();
+
+    const vec = result.expressions.items[0];
+    try testing.expectEqual(vec.kind, .Vector);
+    try testing.expectEqual(vec.value.vector.items.len, 2);
+    try testing.expectEqualStrings(vec.value.vector.items[0].value.symbol, "my-fun");
+    try testing.expectEqual(vec.value.vector.items[1].value.literal, Token { .Int = 2 });
 }
