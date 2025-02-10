@@ -54,7 +54,8 @@ pub const Module = struct {
 const ExpressionKind = enum {
     List,
     Symbol,
-    Literal,
+    Int,
+    Keyword,
     Vector
 };
 
@@ -64,7 +65,8 @@ pub const Expression = struct {
     value: union(enum) {
         list: ArrayList(Expression),
         symbol: []const u8,
-        literal: Token,
+        int: i64,
+        keyword: []const u8,
         vector: ArrayList(Expression),
     },
 
@@ -98,10 +100,20 @@ pub const Expression = struct {
                     .column = token.column,
                 },
             },
-            .Literal => Expression {
+            .Keyword => Expression {
                 .kind = kind,
                 .value = .{
-                    .literal = token.token,
+                    .keyword = token.token.Keyword,
+                },
+                .position = .{
+                    .line = token.line,
+                    .column = token.column,
+                },
+            },
+            .Int => Expression {
+                .kind = kind,
+                .value = .{
+                    .int = token.token.Int,
                 },
                 .position = .{
                     .line = token.line,
@@ -202,10 +214,15 @@ pub const Parser = struct {
                 _ = self.advance();
                 break :blk try Expression.create(self.allocator, .Symbol, current_token);
             },
+            .Keyword => blk: {
+                _ = self.advance();
+                break :blk try Expression.create(self.allocator, .Keyword, current_token);
+            },
             .Int => blk: {
                 _ = self.advance();
-                break :blk try Expression.create(self.allocator, .Literal, current_token);
+                break :blk try Expression.create(self.allocator, .Int, current_token);
             },
+
             else => ParseError.UnexpectedToken,
         };
     }
@@ -316,16 +333,17 @@ test "parse namespace with multiple expressions" {
     try testing.expectEqual(def_expr.value.list.items.len, 3);
     try testing.expectEqualStrings(def_expr.value.list.items[0].value.symbol, "def");
     try testing.expectEqualStrings(def_expr.value.list.items[1].value.symbol, "x");
-    try testing.expectEqual(def_expr.value.list.items[2].value.literal, Token{ .Int = 42 });
+    try testing.expectEqual(def_expr.value.list.items[2].value.int, 42);
 }
 
 test "parse a simple vector" {
     const tokens = [_]TokenWithPosition{
-        // [my-fun 2]
+        // [my-fun 2 :potato]
         .{ .token = .LeftBracket, .line = 1, .column = 1 },
         .{ .token = .{ .Symbol = "my-fun" }, .line = 1, .column = 2 },
         .{ .token = .{ .Int = 2 }, .line = 1, .column = 9 },
-        .{ .token = .RightBracket, .line = 1, .column = 10 },
+        .{ .token = .{ .Keyword = ":potato" }, .line = 1, .column = 11 },
+        .{ .token = .RightBracket, .line = 1, .column = 18 },
 
         .{ .token = .EOF, .line = 2, .column = 1 },
     };
@@ -336,7 +354,8 @@ test "parse a simple vector" {
 
     const vec = result.expressions.items[0];
     try testing.expectEqual(vec.kind, .Vector);
-    try testing.expectEqual(vec.value.vector.items.len, 2);
+    try testing.expectEqual(vec.value.vector.items.len, 3);
     try testing.expectEqualStrings(vec.value.vector.items[0].value.symbol, "my-fun");
-    try testing.expectEqual(vec.value.vector.items[1].value.literal, Token { .Int = 2 });
+    try testing.expectEqual(vec.value.vector.items[1].value.int, 2);
+    try testing.expectEqual(vec.value.vector.items[2].value.keyword, ":potato");
 }
