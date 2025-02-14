@@ -15,15 +15,18 @@ const TokenWithPosition = token_module.TokenWithPosition;
 // and put all the parsed Expressions into the module
 // Main program calls visualization module
 
+pub const RequiredLib = struct {
+    name: []const u8,
+    as: ?[]const u8,
+    //TODO(evgheni): add refer, as-alias, etc.
+};
+
 // Represents a Clojure file
 pub const Module = struct {
     name: []const u8,
     file_path: []const u8,
 
-    // TODO(evgheni): important bit is to represent requires.
-    // Initially can be a simple way to just track which other namespaces (modules) it requires
-    // so we can build graphs for example.
-
+    required_modules: ArrayList(RequiredLib),
     expressions: ArrayList(Expression),
 
 
@@ -33,6 +36,7 @@ pub const Module = struct {
         return Module{
             .name = "",
             .file_path = file_path,
+            .required_modules = ArrayList(RequiredLib).init(allocator),
             .expressions = ArrayList(Expression).init(allocator),
         };
     }
@@ -42,6 +46,15 @@ pub const Module = struct {
             expression.deinit();
         }
         self.expressions.deinit();
+
+        for (self.required_modules.items) |*lib| {
+            lib.deinit();
+        }
+        self.required_modules.deinit();
+    }
+
+    pub fn addRequiredLib(self: *Module, lib: RequiredLib) !void {
+        try self.required_modules.append(lib);
     }
 
     pub fn addExpression(self: *Module, expr: Expression) !void {
