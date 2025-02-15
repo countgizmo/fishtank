@@ -22,7 +22,7 @@ pub fn main() !void {
         if (status != .ok) @panic("Memory leak detected!");
     }
 
-    var lexer = Lexer.init(gpa.allocator(), "(ns reagent.core)");
+    var lexer = Lexer.init(gpa.allocator(), "(ns my-namespace (:require [clojure.string :as str]))");
     const tokens = try lexer.getTokens();
     defer tokens.deinit();
 
