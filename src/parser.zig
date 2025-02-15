@@ -47,9 +47,6 @@ pub const Module = struct {
         }
         self.expressions.deinit();
 
-        for (self.required_modules.items) |*lib| {
-            lib.deinit();
-        }
         self.required_modules.deinit();
     }
 
@@ -193,6 +190,70 @@ pub const Parser = struct {
         return false;
     }
 
+    // This is what we're aiming at initially
+    // (ns my-namespace
+    //   "Optional docstring"
+    //   {:author "Someone"}  ; Optional metadata
+    //   (:require [clojure.string :as str]
+    //             [other.lib :as other]
+    //             simple.require))
+
+    fn parseRequiredLib(expression: Expression) ?RequiredLib{
+        if (expression.kind == .Vector) {
+            switch (expression.value.vector.items.len) {
+                1 => {
+                    return RequiredLib {
+                        .name = expression.value.vector.items[0].value.symbol,
+                        .as = null,
+                    };
+                },
+                2 => {
+                    const option = expression.value.vector.items[2].value.keyword;
+                    if (std.mem.eql(u8, option, ":as")) {
+                        return RequiredLib {
+                            .name = expression.value.vector.items[0].value.symbol,
+                            .as = option,
+                        };
+                    }
+
+                    if (std.mem.eql(u8, option, ":refer")) {
+                        std.debug.panic(":refer parsing NOT IMPLEMENTED", .{});
+                        // TODO(evgheni): NOT IMPELENTED
+                        // return RequiredLib {
+                        //     .name = expression.value.vector.items[0].value.symbol,
+                        //     .as = option,
+                        // };
+                    }
+                },
+                else => {
+                    return null;
+                }
+            }
+        }
+
+        if (expression.kind == .Symbol) {
+            return RequiredLib {
+                .name = expression.value.symbol,
+                .as = null,
+            };
+        }
+
+        return null;
+    }
+
+    fn parseNs(module: *Module, expression: Expression) !void {
+        module.name = expression.value.list.items[1].value.symbol;
+
+        if (expression.value.list.items.len > 2) {
+            const require = expression.value.list.items[2].value.list;
+            for (require.items) |item| {
+                if (parseRequiredLib(item)) |lib| {
+                    try module.addRequiredLib(lib);
+                }
+            }
+        }
+    }
+
     pub fn parse(self: *Parser, file_path: []const u8) !Module {
         if (self.tokens.len == 0) {
             return ParseError.UnexpectedEOF;
@@ -207,7 +268,7 @@ pub const Parser = struct {
                 else => {
                     const expression = try self.parseExpression();
                     if (std.mem.eql(u8, module.name, "") and isNs(expression)) {
-                        module.name = expression.value.list.items[1].value.symbol;
+                        try parseNs(&module, expression);
                     }
                     try module.addExpression(expression);
                 },
@@ -371,4 +432,27 @@ test "parse a simple vector" {
     try testing.expectEqualStrings(vec.value.vector.items[0].value.symbol, "my-fun");
     try testing.expectEqual(vec.value.vector.items[1].value.int, 2);
     try testing.expectEqual(vec.value.vector.items[2].value.keyword, ":potato");
+}
+
+test "parse a ns form" {
+    const tokens = [_]TokenWithPosition{
+        // (ns my-namespace (:require simple.require))
+        .{ .token = .LeftParen, .line = 1, .column = 1 },
+        .{ .token = .{ .Symbol = "ns" }, .line = 1, .column = 2 },
+        .{ .token = .{ .Symbol = "my-namespace" }, .line = 1, .column = 5 },
+        .{ .token = .LeftParen, .line = 1, .column = 18 },
+        .{ .token = .{ .Keyword = ":require" }, .line = 1, .column = 19 },
+        .{ .token = .{ .Symbol = "simple.require" }, .line = 1, .column = 28 },
+        .{ .token = .RightParen, .line = 1, .column = 29 },
+        .{ .token = .RightParen, .line = 1, .column = 30 },
+        .{ .token = .EOF, .line = 2, .column = 1 },
+    };
+
+    var parser = Parser.init(testing.allocator, &tokens);
+    var module = try parser.parse("test_file.clj");
+    defer module.deinit();
+
+    try testing.expectEqualStrings("my-namespace", module.name);
+    try testing.expectEqual(1, module.required_modules.items.len);
+    try testing.expectEqualStrings("simple.require", module.required_modules.items[0].name);
 }
