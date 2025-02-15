@@ -207,12 +207,12 @@ pub const Parser = struct {
                         .as = null,
                     };
                 },
-                2 => {
-                    const option = expression.value.vector.items[2].value.keyword;
+                3 => {
+                    const option = expression.value.vector.items[1].value.keyword;
                     if (std.mem.eql(u8, option, ":as")) {
                         return RequiredLib {
                             .name = expression.value.vector.items[0].value.symbol,
-                            .as = option,
+                            .as = expression.value.vector.items[2].value.symbol,
                         };
                     }
 
@@ -436,16 +436,34 @@ test "parse a simple vector" {
 
 test "parse a ns form" {
     const tokens = [_]TokenWithPosition{
-        // (ns my-namespace (:require simple.require))
+        // (ns my-namespace
+        //   (:require [clojure.string :as str]
+        //             [other.lib :as other]
+        //             simple.require))
+
         .{ .token = .LeftParen, .line = 1, .column = 1 },
         .{ .token = .{ .Symbol = "ns" }, .line = 1, .column = 2 },
         .{ .token = .{ .Symbol = "my-namespace" }, .line = 1, .column = 5 },
-        .{ .token = .LeftParen, .line = 1, .column = 18 },
-        .{ .token = .{ .Keyword = ":require" }, .line = 1, .column = 19 },
-        .{ .token = .{ .Symbol = "simple.require" }, .line = 1, .column = 28 },
-        .{ .token = .RightParen, .line = 1, .column = 29 },
-        .{ .token = .RightParen, .line = 1, .column = 30 },
-        .{ .token = .EOF, .line = 2, .column = 1 },
+        .{ .token = .LeftParen, .line = 2, .column = 22 },
+        .{ .token = .{ .Keyword = ":require" }, .line = 2, .column = 3 },
+
+        .{ .token = .LeftBracket, .line = 2, .column = 12 },
+        .{ .token = .{ .Symbol = "clojure.string" }, .line = 2, .column = 13 },
+        .{ .token = .{ .Keyword = ":as" }, .line = 2, .column = 28 },
+        .{ .token = .{ .Symbol = "str" }, .line = 2, .column = 32 },
+        .{ .token = .RightBracket, .line = 2, .column = 35},
+
+        .{ .token = .LeftBracket, .line = 3, .column = 12 },
+        .{ .token = .{ .Symbol = "other.lib" }, .line = 3, .column = 13 },
+        .{ .token = .{ .Keyword = ":as" }, .line = 3, .column = 23 },
+        .{ .token = .{ .Symbol = "other" }, .line = 3, .column = 27 },
+        .{ .token = .RightBracket, .line = 3, .column = 33},
+
+
+        .{ .token = .{ .Symbol = "simple.require" }, .line = 3, .column = 28 },
+        .{ .token = .RightParen, .line = 3, .column = 44 },
+        .{ .token = .RightParen, .line = 3, .column = 45 },
+        .{ .token = .EOF, .line = 4, .column = 1 },
     };
 
     var parser = Parser.init(testing.allocator, &tokens);
@@ -453,6 +471,14 @@ test "parse a ns form" {
     defer module.deinit();
 
     try testing.expectEqualStrings("my-namespace", module.name);
-    try testing.expectEqual(1, module.required_modules.items.len);
-    try testing.expectEqualStrings("simple.require", module.required_modules.items[0].name);
+    try testing.expectEqual(3, module.required_modules.items.len);
+
+    try testing.expectEqualStrings("clojure.string", module.required_modules.items[0].name);
+    try testing.expectEqualStrings("str", module.required_modules.items[0].as.?);
+
+    try testing.expectEqualStrings("other.lib", module.required_modules.items[1].name);
+    try testing.expectEqualStrings("other", module.required_modules.items[1].as.?);
+
+    try testing.expectEqualStrings("simple.require", module.required_modules.items[2].name);
+    try testing.expectEqual(null, module.required_modules.items[2].as);
 }
