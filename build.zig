@@ -19,11 +19,11 @@ pub fn build(b: *std.Build) !void {
 
     exe.addIncludePath(b.path("libs/raylib/src"));
 
-    // b.installDirectory(.{
-    //     .source_dir = b.path("resources"),
-    //     .install_dir = .prefix,
-    //     .install_subdir = "resources",
-    // });
+    b.installDirectory(.{
+        .source_dir = b.path("resources"),
+        .install_dir = .prefix,
+        .install_subdir = "resources",
+    });
 
     exe.linkLibrary(raylib_dep.artifact("raylib"));
     b.installArtifact(exe);
