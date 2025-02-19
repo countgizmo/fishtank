@@ -13,7 +13,7 @@ const LINE_HEIGHT: f32 = 20;
 const SHADOW_OFFSET: f32 = 4;
 const shadow_color = rl.Color{ .r = 0, .g = 0, .b = 0, .a = 40 };
 
-pub fn renderModule(module: Module) void {
+pub fn renderModule(font: rl.Font, module: Module) void {
     const pos = rl.Vector2{ .x = 100, .y = 100 };
 
     rl.DrawRectangle(
@@ -43,12 +43,18 @@ pub fn renderModule(module: Module) void {
 
     var buf: [255:0] u8 = undefined;
     const module_name = std.fmt.bufPrintZ(&buf, "{s}", .{module.name}) catch "";
+    const name_pos = rl.Vector2 {
+        .x = @as(i32, @intFromFloat(pos.x + TEXT_PADDING)),
+        .y = @as(i32, @intFromFloat(pos.y + TEXT_PADDING)),
+    };
 
-    rl.DrawText(
+
+    rl.DrawTextEx(
+        font,
         module_name,
-        @as(i32, @intFromFloat(pos.x + TEXT_PADDING)),
-        @as(i32, @intFromFloat(pos.y + TEXT_PADDING)),
+        name_pos,
         20,
+        0,
         rl.BLACK
     );
 
@@ -57,11 +63,17 @@ pub fn renderModule(module: Module) void {
 
     // Draw "requires:" label
     if (module.required_modules.items.len > 0) {
-        rl.DrawText(
+        const req_position = rl.Vector2 {
+            .x = pos.x + TEXT_PADDING,
+            .y = pos.y + y_offset,
+        };
+
+        rl.DrawTextEx(
+            font,
             "requires:",
-            @as(i32, @intFromFloat(pos.x + TEXT_PADDING)),
-            @as(i32, @intFromFloat(pos.y + y_offset)),
+            req_position,
             16,
+            0,
             rl.GRAY
         );
 
@@ -72,26 +84,34 @@ pub fn renderModule(module: Module) void {
     for (module.required_modules.items) |entry| {
         const lib_name = std.fmt.bufPrintZ(&buf, "{s}", .{entry.name}) catch "";
 
-        const x = @as(i32, @intFromFloat(pos.x + 2*TEXT_PADDING));
-        const y = @as(i32, @intFromFloat(pos.y + y_offset));
-        rl.DrawText(
+        const lib_name_pos = rl.Vector2 {
+            .x = pos.x + 2*TEXT_PADDING,
+            .y = pos.y + y_offset,
+        };
+
+        rl.DrawTextEx(
+            font,
             lib_name,
-            x,
-            y,
+            lib_name_pos,
             16,
+            0,
             rl.BLACK
         );
 
         if (entry.as) |alias| {
             const lib_as = std.fmt.bufPrintZ(&buf, " {s}", .{alias}) catch "";
             const lib_name_size = rl.MeasureTextEx(rl.GetFontDefault(), entry.name.ptr, 16, 0);
-            const lib_as_x = x + @as(i32, @intFromFloat(lib_name_size.x));
+            const lib_pos = rl.Vector2 {
+                .x = lib_name_pos.x + lib_name_size.x,
+                .y = lib_name_pos.y,
+            };
 
-            rl.DrawText(
+            rl.DrawTextEx(
+                font,
                 lib_as,
-                lib_as_x,
-                y,
+                lib_pos,
                 16,
+                0,
                 rl.BLUE
             );
 

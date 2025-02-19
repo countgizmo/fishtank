@@ -51,7 +51,7 @@ pub fn main() !void {
         rl.BeginDrawing();
         rl.ClearBackground(rl.WHITE);
 
-        Render.renderModule(module);
+        Render.renderModule(font, module);
         rl.EndDrawing();
     }
 }
