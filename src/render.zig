@@ -114,7 +114,6 @@ pub fn renderModule(font: rl.Font, module: Module) void {
                 0,
                 rl.BLUE
             );
-
         }
 
         // const = std.fmt.bufPrintZ(&buf, "{s}", .{module.name}) catch "";
