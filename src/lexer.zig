@@ -129,7 +129,7 @@ pub const Lexer = struct {
         while (self.cursor < self.source.len) {
             const c = self.advance();
             switch (c) {
-                ' ', ',', ';' => continue,
+                ' ', ',', ';', '\n', '\r' => continue,
                 '(' => return self.makeToken(.LeftParen),
                 ')' => return self.makeToken(.RightParen),
                 '[' => return self.makeToken(.LeftBracket),
