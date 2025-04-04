@@ -19,7 +19,7 @@ fn getFontPath(allocator: Allocator) ![:0]u8 {
     const full_font_path = try std.fs.path.join(allocator, &paths);
     defer allocator.free(full_font_path);
 
-    var path_buf: [std.fs.MAX_PATH_BYTES]u8 = undefined;
+    var path_buf: [std.fs.max_path_bytes]u8 = undefined;
     const path = try std.fs.realpath(full_font_path, &path_buf);
     return allocator.dupeZ(u8, path);
 }

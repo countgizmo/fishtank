@@ -1,5 +1,6 @@
 .{
-    .name = "fishtan/k",
+    .name = .fishtank,
+    .fingerprint = 0xc52a54a505f42550,
     .version = "0.1.0",
     .dependencies = .{
         .raylib = .{
