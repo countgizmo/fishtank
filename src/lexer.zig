@@ -11,6 +11,8 @@ const TokenWithPosition  = token.TokenWithPosition;
 
 const LexerError = error {
     UnexpectedCharacter,
+    UnexpectedFirstCharacter,
+    UnexpectedNumberCharacter,
 };
 
 pub const Lexer = struct {
@@ -49,7 +51,14 @@ pub const Lexer = struct {
             error.UnexpectedCharacter => {
                 tokens.deinit();
                 if (!self.quiet) {
-                    std.log.err("Unexpected token {c} at column {d} line {d}", .{self.source[self.cursor-1], self.column, self.line});
+                    std.log.err("Unexpected token '{c}' at column {d} line {d}", .{self.source[self.cursor-1], self.column, self.line});
+                }
+                return err;
+            },
+            else => {
+                tokens.deinit();
+                if (!self.quiet) {
+                    std.log.err("Unhandle error parsing token '{c}' at column {d} line {d}", .{self.source[self.cursor-1], self.column, self.line});
                 }
                 return err;
             }
@@ -125,25 +134,41 @@ pub const Lexer = struct {
         return ch == ':';
     }
 
+    fn isDelimiter(ch: u8) bool {
+        switch (ch) {
+            ' ', ',', ';', '\n', '\r' => {return true;},
+            else => {return false;},
+        }
+    }
+
     pub fn nextToken(self: *Lexer) !TokenWithPosition {
         while (self.cursor < self.source.len) {
             const c = self.advance();
+
+            if (isDelimiter(c)) {
+                continue;
+            }
+
             switch (c) {
-                ' ', ',', ';', '\n', '\r' => continue,
                 '(' => return self.makeToken(.LeftParen),
                 ')' => return self.makeToken(.RightParen),
                 '[' => return self.makeToken(.LeftBracket),
                 ']' => return self.makeToken(.RightBracket),
+                '{' => return self.makeToken(.LeftBrace),
+                '}' => return self.makeToken(.RightBrace),
                 else => {
                     if (self.isSymbolBegins(c)) {
                         const maybe_symbol = self.lexSymbolOrBuiltIn();
                         if (isValidNamespacedSymbol(maybe_symbol)) {
                             return maybe_symbol;
                         }
-                        return LexerError.UnexpectedCharacter;
+                        return LexerError.UnexpectedFirstCharacter;
                     } else if (isKeywordBegins(c)) {
                         const maybe_keyword = self.lexKeyword();
                         return maybe_keyword;
+                    } else if (std.ascii.isDigit(c)) {
+                        const mayber_number = self.lexNumber();
+                        return mayber_number;
                     } else {
                         return LexerError.UnexpectedCharacter;
                     }
@@ -213,6 +238,31 @@ pub const Lexer = struct {
 
         return TokenWithPosition{
             .token = Token{ .Keyword = text },
+            .line = self.line,
+            .column = start + 1,
+        };
+    }
+
+    // TODO(evheni): parse floats.
+    fn lexNumber(self: *Lexer) !TokenWithPosition {
+        const start = self.cursor - 1;
+
+        while (self.cursor < self.source.len and std.ascii.isDigit(self.source[self.cursor])) {
+            _ = self.advance();
+        }
+
+        const next = self.peek();
+        if (!isDelimiter(next) and
+            next != '}' and
+            next != ']' and
+            next != ')') {
+            return LexerError.UnexpectedNumberCharacter;
+        }
+
+        const text = self.source[start..self.cursor];
+        const int = try std.fmt.parseInt(i64, text, 10);
+        return TokenWithPosition {
+            .token = Token{ .Int = int },
             .line = self.line,
             .column = start + 1,
         };
@@ -350,25 +400,31 @@ test "tokenize valid namespaced symbols" {
     }
 }
 
+const InvalidSymbolWithReason = struct {
+    symbol: []const u8,
+    expected_error: LexerError,
+};
+
+
 test "tokenize invalid symbols" {
-    const invalid_symbols = [_][]const u8{
-        "123abc",
-        "1name",
-        "+1thing",
-        "-3value",
-        ".4symbol",
-        "/foo",
-        "foo/",
-        "ns/foo/bar",
-        "foo@bar",
-        "foo~bar",
-        "#something",
+    const invalid_symbols = [_]InvalidSymbolWithReason{
+        .{ .symbol = "123abc", .expected_error = LexerError.UnexpectedNumberCharacter },
+        .{ .symbol = "1name", .expected_error = LexerError.UnexpectedNumberCharacter },
+        .{ .symbol = "+1thing", .expected_error = LexerError.UnexpectedCharacter},
+        .{ .symbol = "-3value", .expected_error = LexerError.UnexpectedCharacter},
+        .{ .symbol = ".4symbol", .expected_error = LexerError.UnexpectedCharacter},
+        .{ .symbol = "/foo", .expected_error = LexerError.UnexpectedCharacter},
+        .{ .symbol = "foo/", .expected_error = LexerError.UnexpectedFirstCharacter},
+        .{ .symbol = "ns/foo/bar", .expected_error = LexerError.UnexpectedFirstCharacter},
+        .{ .symbol = "foo@bar", .expected_error = LexerError.UnexpectedCharacter},
+        .{ .symbol = "foo~bar", .expected_error = LexerError.UnexpectedCharacter},
+        .{ .symbol = "#something", .expected_error = LexerError.UnexpectedCharacter},
     };
 
     for (invalid_symbols) |invalid_symbol| {
-        var lexer = Lexer.initQuiet(std.testing.allocator, invalid_symbol);
+        var lexer = Lexer.initQuiet(std.testing.allocator, invalid_symbol.symbol);
         try std.testing.expectError(
-            LexerError.UnexpectedCharacter,
+            invalid_symbol.expected_error,
             lexer.getTokens()
         );
     }
@@ -415,6 +471,158 @@ test "lexer - namespaced keywords" {
         switch (actual_token.token) {
             .Keyword => |value| {
                 try expectEqualStrings(expected_tokens[idx].token.Keyword, value);
+                try expectEqual(expected_tokens[idx].column, actual_token.column);
+            },
+            else => try expectEqual(expected_tokens[idx], actual_token),
+        }
+    }
+}
+
+test "lexer - empty map" {
+    const source = "{}";
+    var l = Lexer.init(testing.allocator, source);
+
+    const expected_tokens = [_]TokenWithPosition{
+        .{ .token = .LeftBrace, .column = 1, .line = 1 },
+        .{ .token = .RightBrace, .column = 2, .line = 1 },
+        .{ .token = .EOF, .column = 3, .line = 1 },
+    };
+
+    const tokens = try l.getTokens();
+    defer tokens.deinit();
+
+    for (tokens.items, 0..) |actual_token, idx| {
+        try expectEqual(expected_tokens[idx], actual_token);
+    }
+}
+
+test "lexer - simple map" {
+    const source = "{:a 1, :b 2}";
+    var l = Lexer.init(testing.allocator, source);
+
+    const expected_tokens = [_]TokenWithPosition{
+        .{ .token = .LeftBrace, .column = 1, .line = 1 },
+        .{ .token = .{ .Keyword = ":a" }, .column = 2, .line = 1 },
+        .{ .token = .{ .Int = 1 }, .column = 5, .line = 1 },
+        .{ .token = .{ .Keyword = ":b" }, .column = 8, .line = 1 },
+        .{ .token = .{ .Int = 2 }, .column = 11, .line = 1 },
+        .{ .token = .RightBrace, .column = 12, .line = 1 },
+        .{ .token = .EOF, .column = 13, .line = 1 },
+    };
+
+    const tokens = try l.getTokens();
+    defer tokens.deinit();
+
+    for (tokens.items, 0..) |actual_token, idx| {
+        switch (actual_token.token) {
+            .Keyword => |value| {
+                try expectEqualStrings(expected_tokens[idx].token.Keyword, value);
+                try expectEqual(expected_tokens[idx].column, actual_token.column);
+            },
+            .Int => |value| {
+                try expectEqual(expected_tokens[idx].token.Int, value);
+                try expectEqual(expected_tokens[idx].column, actual_token.column);
+            },
+            else => try expectEqual(expected_tokens[idx], actual_token),
+        }
+    }
+}
+
+test "lexer - nested map" {
+    const source = "{:a {:nested 42}, :b [1 2]}";
+    var l = Lexer.init(testing.allocator, source);
+
+    const expected_tokens = [_]TokenWithPosition{
+        .{ .token = .LeftBrace, .column = 1, .line = 1 },
+        .{ .token = .{ .Keyword = ":a" }, .column = 2, .line = 1 },
+        .{ .token = .LeftBrace, .column = 5, .line = 1 },
+        .{ .token = .{ .Keyword = ":nested" }, .column = 6, .line = 1 },
+        .{ .token = .{ .Int = 42 }, .column = 14, .line = 1 },
+        .{ .token = .RightBrace, .column = 16, .line = 1 },
+        .{ .token = .{ .Keyword = ":b" }, .column = 19, .line = 1 },
+        .{ .token = .LeftBracket, .column = 22, .line = 1 },
+        .{ .token = .{ .Int = 1 }, .column = 23, .line = 1 },
+        .{ .token = .{ .Int = 2 }, .column = 25, .line = 1 },
+        .{ .token = .RightBracket, .column = 26, .line = 1 },
+        .{ .token = .RightBrace, .column = 27, .line = 1 },
+        .{ .token = .EOF, .column = 28, .line = 1 },
+    };
+
+    const tokens = try l.getTokens();
+    defer tokens.deinit();
+
+    for (tokens.items, 0..) |actual_token, idx| {
+        switch (actual_token.token) {
+            .Keyword => |value| {
+                try expectEqualStrings(expected_tokens[idx].token.Keyword, value);
+                try expectEqual(expected_tokens[idx].column, actual_token.column);
+            },
+            .Int => |value| {
+                try expectEqual(expected_tokens[idx].token.Int, value);
+                try expectEqual(expected_tokens[idx].column, actual_token.column);
+            },
+            else => try expectEqual(expected_tokens[idx], actual_token),
+        }
+    }
+}
+
+test "lexer - map with namespaced keys" {
+    const source = "{:my/key 1, :other.ns/value 2}";
+    var l = Lexer.init(testing.allocator, source);
+
+    const expected_tokens = [_]TokenWithPosition{
+        .{ .token = .LeftBrace, .column = 1, .line = 1 },
+        .{ .token = .{ .Keyword = ":my/key" }, .column = 2, .line = 1 },
+        .{ .token = .{ .Int = 1 }, .column = 10, .line = 1 },
+        .{ .token = .{ .Keyword = ":other.ns/value" }, .column = 13, .line = 1 },
+        .{ .token = .{ .Int = 2 }, .column = 29, .line = 1 },
+        .{ .token = .RightBrace, .column = 30, .line = 1 },
+        .{ .token = .EOF, .column = 31, .line = 1 },
+    };
+
+    const tokens = try l.getTokens();
+    defer tokens.deinit();
+
+    for (tokens.items, 0..) |actual_token, idx| {
+        switch (actual_token.token) {
+            .Keyword => |value| {
+                try expectEqualStrings(expected_tokens[idx].token.Keyword, value);
+                try expectEqual(expected_tokens[idx].column, actual_token.column);
+            },
+            .Int => |value| {
+                try expectEqual(expected_tokens[idx].token.Int, value);
+                try expectEqual(expected_tokens[idx].column, actual_token.column);
+            },
+            else => try expectEqual(expected_tokens[idx], actual_token),
+        }
+    }
+}
+
+test "lexer - map with symbol keys" {
+    const source = "{test 1, other/symbol 2}";
+    var l = Lexer.init(testing.allocator, source);
+
+    const expected_tokens = [_]TokenWithPosition{
+        .{ .token = .LeftBrace, .column = 1, .line = 1 },
+        .{ .token = .{ .Symbol = "test" }, .column = 2, .line = 1 },
+        .{ .token = .{ .Int = 1 }, .column = 7, .line = 1 },
+        .{ .token = .{ .Symbol = "other/symbol" }, .column = 10, .line = 1 },
+        .{ .token = .{ .Int = 2 }, .column = 23, .line = 1 },
+        .{ .token = .RightBrace, .column = 24, .line = 1 },
+        .{ .token = .EOF, .column = 25, .line = 1 },
+    };
+
+    const tokens = try l.getTokens();
+    defer tokens.deinit();
+
+    for (tokens.items, 0..) |actual_token, idx| {
+        switch (actual_token.token) {
+            .Symbol => |value| {
+                try expectEqualStrings(expected_tokens[idx].token.Symbol, value);
+                try expectEqual(expected_tokens[idx].column, actual_token.column);
+            },
+            .Int => |value| {
+                try expectEqual(expected_tokens[idx].token.Int, value);
                 try expectEqual(expected_tokens[idx].column, actual_token.column);
             },
             else => try expectEqual(expected_tokens[idx], actual_token),
