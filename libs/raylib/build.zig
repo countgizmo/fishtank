@@ -192,7 +192,6 @@ fn compileRaylib(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.
             setDesktopPlatform(raylib, options.platform);
         },
         .linux => {
-
             if (options.platform == .drm) {
                 if (options.opengl_version == .auto) {
                     raylib.linkSystemLibrary("GLESv2");
@@ -206,37 +205,42 @@ fn compileRaylib(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.
                 raylib.root_module.addCMacro("PLATFORM_DRM", "");
                 raylib.root_module.addCMacro("EGL_NO_X11", "");
                 raylib.root_module.addCMacro("DEFAULT_BATCH_BUFFER_ELEMENT", "");
-            } else if (target.result.abi == .android) {
+            } else if (target.result.abi.isAndroid()) {
 
                 //these are the only tag options per https://developer.android.com/ndk/guides/other_build_systems
-                const hostTuple = switch(builtin.target.os.tag) {
-                    .linux =>   "linux-x86_64",
+                const hostTuple = switch (builtin.target.os.tag) {
+                    .linux => "linux-x86_64",
                     .windows => "windows-x86_64",
-                    .macos =>   "darwin-x86_64",
-                    else => {
-                        @panic("unsupported host OS");
-                    }
+                    .macos => "darwin-x86_64",
+                    else => @panic("unsupported host OS"),
                 };
 
-                const androidTriple = try target.result.linuxTriple(b.allocator);
+                const androidTriple = switch (target.result.cpu.arch) {
+                    .x86 => "i686-linux-android",
+                    .x86_64 => "x86_64-linux-android",
+                    .arm => "arm-linux-androideabi",
+                    .aarch64 => "aarch64-linux-android",
+                    .riscv64 => "riscv64-linux-android",
+                    else => error.InvalidAndroidTarget,
+                } catch @panic("invalid android target!");
                 const androidNdkPathString: []const u8 = options.android_ndk;
-                if(androidNdkPathString.len < 1) @panic("no ndk path provided and ANDROID_NDK_HOME is not set");
+                if (androidNdkPathString.len < 1) @panic("no ndk path provided and ANDROID_NDK_HOME is not set");
                 const androidApiLevel: []const u8 = options.android_api_version;
 
-                const androidSysroot = try std.fs.path.join(b.allocator, &.{androidNdkPathString,  "/toolchains/llvm/prebuilt/", hostTuple, "/sysroot"});
-                const androidLibPath = try std.fs.path.join(b.allocator, &.{androidSysroot, "/usr/lib/", androidTriple});
-                const androidApiSpecificPath =  try std.fs.path.join(b.allocator, &.{androidLibPath, androidApiLevel});
-                const androidIncludePath = try std.fs.path.join(b.allocator, &.{androidSysroot, "/usr/include"});
-                const androidArchIncludePath = try std.fs.path.join(b.allocator, &.{androidIncludePath, androidTriple});
-                const androidAsmPath = try std.fs.path.join(b.allocator, &.{androidIncludePath, "/asm-generic"});
-                const androidGluePath = try std.fs.path.join(b.allocator, &.{androidNdkPathString, "/sources/android/native_app_glue/"});
+                const androidSysroot = try std.fs.path.join(b.allocator, &.{ androidNdkPathString, "/toolchains/llvm/prebuilt/", hostTuple, "/sysroot" });
+                const androidLibPath = try std.fs.path.join(b.allocator, &.{ androidSysroot, "/usr/lib/", androidTriple });
+                const androidApiSpecificPath = try std.fs.path.join(b.allocator, &.{ androidLibPath, androidApiLevel });
+                const androidIncludePath = try std.fs.path.join(b.allocator, &.{ androidSysroot, "/usr/include" });
+                const androidArchIncludePath = try std.fs.path.join(b.allocator, &.{ androidIncludePath, androidTriple });
+                const androidAsmPath = try std.fs.path.join(b.allocator, &.{ androidIncludePath, "/asm-generic" });
+                const androidGluePath = try std.fs.path.join(b.allocator, &.{ androidNdkPathString, "/sources/android/native_app_glue/" });
 
-                raylib.addLibraryPath(.{ .cwd_relative =  androidLibPath});
+                raylib.addLibraryPath(.{ .cwd_relative = androidLibPath });
                 raylib.root_module.addLibraryPath(.{ .cwd_relative = androidApiSpecificPath });
                 raylib.addSystemIncludePath(.{ .cwd_relative = androidIncludePath });
-                raylib.addSystemIncludePath(.{ .cwd_relative = androidArchIncludePath});
-                raylib.addSystemIncludePath( .{ .cwd_relative = androidAsmPath});
-                raylib.addSystemIncludePath(.{ .cwd_relative = androidGluePath});
+                raylib.addSystemIncludePath(.{ .cwd_relative = androidArchIncludePath });
+                raylib.addSystemIncludePath(.{ .cwd_relative = androidAsmPath });
+                raylib.addSystemIncludePath(.{ .cwd_relative = androidGluePath });
 
                 var libcData = std.ArrayList(u8).init(b.allocator);
                 const writer = libcData.writer();
@@ -252,6 +256,7 @@ fn compileRaylib(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.
                     raylib.root_module.linkSystemLibrary("GLESv2", .{});
                     raylib.root_module.addCMacro("GRAPHICS_API_OPENGL_ES2", "");
                 }
+                raylib.root_module.linkSystemLibrary("EGL", .{});
 
                 setDesktopPlatform(raylib, .android);
             } else {
@@ -442,7 +447,7 @@ pub const PlatformBackend = enum {
     rgfw,
     sdl,
     drm,
-    android
+    android,
 };
 
 pub fn build(b: *std.Build) !void {
@@ -464,16 +469,6 @@ pub fn build(b: *std.Build) !void {
     lib.installHeader(b.path("src/rlgl.h"), "rlgl.h");
 
     b.installArtifact(lib);
-
-    const examples = b.step("examples", "Build/Install all examples");
-    examples.dependOn(try addExamples("audio", b, target, optimize, lib));
-    examples.dependOn(try addExamples("core", b, target, optimize, lib));
-    examples.dependOn(try addExamples("models", b, target, optimize, lib));
-    examples.dependOn(try addExamples("others", b, target, optimize, lib));
-    examples.dependOn(try addExamples("shaders", b, target, optimize, lib));
-    examples.dependOn(try addExamples("shapes", b, target, optimize, lib));
-    examples.dependOn(try addExamples("text", b, target, optimize, lib));
-    examples.dependOn(try addExamples("textures", b, target, optimize, lib));
 }
 
 fn waylandGenerate(
@@ -497,101 +492,6 @@ fn waylandGenerate(
 
     raylib.step.dependOn(&client_step.step);
     raylib.step.dependOn(&private_step.step);
-}
-
-fn addExamples(
-    comptime module: []const u8,
-    b: *std.Build,
-    target: std.Build.ResolvedTarget,
-    optimize: std.builtin.OptimizeMode,
-    raylib: *std.Build.Step.Compile,
-) !*std.Build.Step {
-    if (target.result.os.tag == .emscripten) {
-        @panic("Emscripten building via Zig unsupported");
-    }
-
-    const all = b.step(module, "All " ++ module ++ " examples");
-    const module_subpath = b.pathJoin(&.{ "examples", module });
-    var dir = try std.fs.cwd().openDir(b.pathFromRoot(module_subpath), .{ .iterate = true });
-    defer if (comptime builtin.zig_version.minor >= 12) dir.close();
-
-    var iter = dir.iterate();
-    while (try iter.next()) |entry| {
-        if (entry.kind != .file) continue;
-        const extension_idx = std.mem.lastIndexOf(u8, entry.name, ".c") orelse continue;
-        const name = entry.name[0..extension_idx];
-        const path = b.pathJoin(&.{ module_subpath, entry.name });
-
-        // zig's mingw headers do not include pthread.h
-        if (std.mem.eql(u8, "core_loading_thread", name) and target.result.os.tag == .windows) continue;
-
-        const exe = b.addExecutable(.{
-            .name = name,
-            .target = target,
-            .optimize = optimize,
-        });
-        exe.addCSourceFile(.{ .file = b.path(path), .flags = &.{} });
-        exe.linkLibC();
-
-        // special examples that test using these external dependencies directly
-        // alongside raylib
-        if (std.mem.eql(u8, name, "rlgl_standalone")) {
-            exe.addIncludePath(b.path("src"));
-            exe.addIncludePath(b.path("src/external/glfw/include"));
-            if (!hasCSource(raylib.root_module, "rglfw.c")) {
-                exe.addCSourceFile(.{ .file = b.path("src/rglfw.c"), .flags = &.{} });
-            }
-        }
-        if (std.mem.eql(u8, name, "raylib_opengl_interop")) {
-            exe.addIncludePath(b.path("src/external"));
-        }
-
-        exe.linkLibrary(raylib);
-
-        switch (target.result.os.tag) {
-            .windows => {
-                exe.linkSystemLibrary("winmm");
-                exe.linkSystemLibrary("gdi32");
-                exe.linkSystemLibrary("opengl32");
-
-                exe.root_module.addCMacro("PLATFORM_DESKTOP", "");
-            },
-            .linux => {
-                exe.linkSystemLibrary("GL");
-                exe.linkSystemLibrary("rt");
-                exe.linkSystemLibrary("dl");
-                exe.linkSystemLibrary("m");
-                exe.linkSystemLibrary("X11");
-
-                exe.root_module.addCMacro("PLATFORM_DESKTOP", "");
-            },
-            .macos => {
-                exe.linkFramework("Foundation");
-                exe.linkFramework("Cocoa");
-                exe.linkFramework("OpenGL");
-                exe.linkFramework("CoreAudio");
-                exe.linkFramework("CoreVideo");
-                exe.linkFramework("IOKit");
-
-                exe.root_module.addCMacro("PLATFORM_DESKTOP", "");
-            },
-            else => {
-                @panic("Unsupported OS");
-            },
-        }
-
-        const install_cmd = b.addInstallArtifact(exe, .{});
-
-        const run_cmd = b.addRunArtifact(exe);
-        run_cmd.cwd = b.path(module_subpath);
-        run_cmd.step.dependOn(&install_cmd.step);
-
-        const run_step = b.step(name, name);
-        run_step.dependOn(&run_cmd.step);
-
-        all.dependOn(&install_cmd.step);
-    }
-    return all;
 }
 
 fn hasCSource(module: *std.Build.Module, name: []const u8) bool {
