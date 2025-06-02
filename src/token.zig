@@ -10,6 +10,7 @@ pub const Token = union(enum) {
     // Literals
     Symbol: []const u8,
     Keyword: []const u8,
+    String: []const u8,
     Int: i64,
 
     // Built-ins

@@ -13,6 +13,7 @@ const LexerError = error {
     UnexpectedCharacter,
     UnexpectedFirstCharacter,
     UnexpectedNumberCharacter,
+    UnexpectedEndOfString,
 };
 
 pub const Lexer = struct {
@@ -169,7 +170,10 @@ pub const Lexer = struct {
                     } else if (std.ascii.isDigit(c)) {
                         const mayber_number = self.lexNumber();
                         return mayber_number;
-                    } else {
+                    } else if (c == '"') {
+                        const maybe_string = self.lexString();
+                        return maybe_string;
+                    }else {
                         return LexerError.UnexpectedCharacter;
                     }
                 }
@@ -267,9 +271,49 @@ pub const Lexer = struct {
             .column = start + 1,
         };
     }
+
+    fn isValidEscape(ch: u8) bool {
+        switch(ch) {
+            't', 'r', 'n', '\\', '"' => return true,
+            else => {
+                return false;
+            }
+        }
+    }
+
+
+    fn isValidStringCharacter(self: Lexer, ch: u8) bool {
+        return isValidSymbolCharacter(ch)
+        or isDelimiter(ch)
+        or (ch == '\\' and isValidEscape(self.peek()));
+    }
+
+    fn lexString(self: *Lexer) !TokenWithPosition {
+        // No -1 cause we exclude openning quote from the value
+        const start = self.cursor;
+
+        while (self.cursor < self.source.len-1 and self.isValidStringCharacter(self.peek())) {
+            _ = self.advance();
+        }
+
+        // String must end with "
+        if (self.peek() != '"') {
+            return LexerError.UnexpectedEndOfString;
+        }
+
+        // We don't include the quotes (beginning or ending) in the text.
+        const text = self.source[start..self.cursor];
+
+        // Skipping the end quote
+        _ = self.advance();
+
+        return TokenWithPosition{
+            .token = Token{ .String = text },
+            .line = self.line,
+            .column = start,
+        };
+    }
 };
-
-
 
 test "init lexer" {
     const source = "(def a 1)";
@@ -624,6 +668,30 @@ test "lexer - map with symbol keys" {
             .Int => |value| {
                 try expectEqual(expected_tokens[idx].token.Int, value);
                 try expectEqual(expected_tokens[idx].column, actual_token.column);
+            },
+            else => try expectEqual(expected_tokens[idx], actual_token),
+        }
+    }
+}
+
+test "lexer - simple string" {
+    const source = "\"maybe I am a potato\"";
+    var l = Lexer.init(testing.allocator, source);
+
+    const expected_tokens = [_]TokenWithPosition{
+        .{ .token = .{ .String = "maybe I am a potato" }, .column = 1, .line = 1},
+        .{ .token = .EOF, .column = 22, .line = 1 },
+    };
+
+    const tokens = try l.getTokens();
+    defer tokens.deinit();
+
+    for (tokens.items, 0..) |actual_token, idx| {
+        switch (actual_token.token) {
+            .String => |value| {
+                try expectEqualStrings(expected_tokens[idx].token.String, value);
+                try expectEqual(expected_tokens[idx].column, actual_token.column);
+                try expectEqual(expected_tokens[idx].line, actual_token.line);
             },
             else => try expectEqual(expected_tokens[idx], actual_token),
         }
