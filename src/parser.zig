@@ -1,6 +1,8 @@
 const std = @import("std");
 const testing = std.testing;
+const expectEqual = testing.expectEqual;
 const ArrayList = std.ArrayList;
+const HashMap = std.HashMap;
 const Allocator = std.mem.Allocator;
 const token_module = @import("token.zig");
 const Token = token_module.Token;
@@ -63,10 +65,12 @@ pub const Module = struct {
 //TODO(evgheni): Add maps, sets, vectors
 const ExpressionKind = enum {
     List,
+    String,
     Symbol,
     Int,
     Keyword,
-    Vector
+    Vector,
+    Map
 };
 
 pub const Expression = struct {
@@ -77,13 +81,56 @@ pub const Expression = struct {
         symbol: []const u8,
         int: i64,
         keyword: []const u8,
+        string: []const u8,
         vector: ArrayList(Expression),
+        map: HashMap(Expression, Expression, Expression.HashContext, 80),
     },
 
     position: struct {
         line: usize,
         column: usize,
     },
+
+    // fn hashExpression(expr: Expression) u64 {
+    //     var hasher = std.hash.Wyhash.init(0);
+    //
+    //     switch (expr.kind) {
+    //         .String => {
+    //             hasher.update(expr.value.string);
+    //         },
+    //         .Symbol => {
+    //             hasher.update(expr.value.symbol);
+    //         },
+    //         .Int => {
+    //             hasher.update(std.mem.asBytes(&expr.value.int));
+    //         },
+    //         .Keyword => {
+    //             hasher.update(expr.value.keyword);
+    //         },
+    //         .Map => {
+    //             hasher.update(std.mem.asBytes(&expr.value.int));
+    //         }
+    //     }
+    //     // Hash the slice contents, not the pointer
+    //     hasher.update(expr.name);
+    //
+    //     // Hash other fields
+    //     hasher.update(std.mem.asBytes(&expr.value));
+    //
+    //     return hasher.final();
+    // }
+
+    pub const HashContext = struct {
+        pub fn hash(_: HashContext, e: Expression) u64 {
+            var hasher = std.hash.Wyhash.init(0);
+            std.hash.autoHashStrat(&hasher, &e, .Deep);
+            return hasher.final();
+        }
+
+        pub fn eql(_: HashContext, a: Expression, b: Expression) bool {
+            return std.meta.eql(a, b);
+        }
+    };
 
     pub fn create(allocator: Allocator, kind: ExpressionKind, token: TokenWithPosition) !Expression {
         return switch (kind) {
@@ -120,6 +167,16 @@ pub const Expression = struct {
                     .column = token.column,
                 },
             },
+            .String => Expression {
+                .kind = kind,
+                .value = .{
+                    .string = token.token.String,
+                },
+                .position = .{
+                    .line = token.line,
+                    .column = token.column,
+                },
+            },
             .Int => Expression {
                 .kind = kind,
                 .value = .{
@@ -134,6 +191,16 @@ pub const Expression = struct {
                 .kind = kind,
                 .value = .{
                     .vector = ArrayList(Expression).init(allocator),
+                },
+                .position = .{
+                    .line = token.line,
+                    .column = token.column,
+                },
+            },
+            .Map => Expression {
+                .kind = kind,
+                .value = .{
+                    .map = HashMap(Expression, Expression, Expression.HashContext, 80).init(allocator),
                 },
                 .position = .{
                     .line = token.line,
@@ -157,6 +224,16 @@ pub const Expression = struct {
                 }
                 self.value.vector.deinit();
             },
+            .Map => {
+                var iter = self.value.map.iterator();
+
+                while (iter.next()) |item| {
+                    item.key_ptr.deinit();
+                    item.value_ptr.deinit();
+                }
+
+                self.value.map.deinit();
+            },
             else => {}, // Other types don't own memory
         }
     }
@@ -167,6 +244,8 @@ pub const ParseError = error{
     UnexpectedEOF,
     UnbalancedParentheses,
     OutOfMemory,
+    UnclosedMap,
+    UneventMapItems,
 };
 
 pub const Parser = struct {
@@ -284,6 +363,11 @@ pub const Parser = struct {
         return switch (current_token.token) {
             .LeftParen => self.parseList(),
             .LeftBracket => self.parseVector(),
+            .LeftBrace => self.parseMap(),
+            .String => blk: {
+                _ = self.advance();
+                break :blk try Expression.create(self.allocator, .String, current_token);
+            },
             .Symbol => blk: {
                 _ = self.advance();
                 break :blk try Expression.create(self.allocator, .Symbol, current_token);
@@ -338,6 +422,47 @@ pub const Parser = struct {
                 else => {
                     const expression = try self.parseExpression();
                     try list_expression.value.vector.append(expression);
+                },
+            }
+        }
+
+        return ParseError.UnexpectedEOF;
+    }
+
+    fn parseMap(self: *Parser) ParseError!Expression {
+        const left_brace = self.advance() orelse return ParseError.UnexpectedEOF;
+        var map_expression = try Expression.create(self.allocator, .Map, left_brace);
+        errdefer map_expression.deinit();
+
+        var is_key = true;
+        var key: ?Expression = null;
+        var value: ?Expression = null;
+
+        while (self.peek()) |current_token| {
+            switch (current_token.token) {
+                .RightBrace => {
+                    if (key != null and value == null) {
+                        return ParseError.UneventMapItems;
+                    }
+
+                    _ = self.advance();
+                    return map_expression;
+                },
+                .EOF => return ParseError.UnclosedMap,
+                else => {
+                    if (is_key) {
+                        key = try self.parseExpression();
+                    } else {
+                        value = try self.parseExpression();
+                    }
+
+                    if (key != null and value != null) {
+                        try map_expression.value.map.put(key.?, value.?);
+                        key = null;
+                        value = null;
+                    }
+
+                    is_key = !is_key;
                 },
             }
         }
@@ -481,4 +606,67 @@ test "parse a ns form" {
 
     try testing.expectEqualStrings("simple.require", module.required_modules.items[2].name);
     try testing.expectEqual(null, module.required_modules.items[2].as);
+}
+
+test "parse a simple map" {
+    // {:human/name "Abobo"
+    //  :human/age 124
+    //  :human/size :extra-large}
+    const tokens = [_]TokenWithPosition{
+        .{ .token = .LeftBrace, .column = 1, .line = 1 },
+        .{ .token = .{ .Keyword = ":human/name" }, .column = 2, .line = 1 },
+        .{ .token = .{ .String = "Abobo" }, .column = 14, .line = 1 },
+        .{ .token = .{ .Keyword = ":human/age" }, .column = 22, .line = 1 },
+        .{ .token = .{ .Int = 124 }, .column = 33, .line = 1 },
+        .{ .token = .{ .Keyword = ":human/size" }, .column = 37, .line = 1 },
+        .{ .token = .{ .Keyword = ":extra_large" }, .column = 49, .line = 1 },
+        .{ .token = .RightBrace, .column = 61, .line = 1 },
+        .{ .token = .EOF, .column = 62, .line = 1 },
+    };
+
+    var parser = Parser.init(testing.allocator, &tokens);
+    var module = try parser.parse("test_file.clj");
+    defer module.deinit();
+
+    const map = module.expressions.items[0];
+    try expectEqual(map.kind, .Map);
+    try expectEqual(3, map.value.map.count());
+    const human_age = Expression {
+        .kind = .Keyword,
+        .value = .{
+            .keyword = ":human/age",
+        },
+        // TODO(evgheni): I need to write my own hash/eql functions to make sure
+        // I am not using position data for hashing.
+        .position = .{
+            .column = 22,
+            .line = 1
+        },
+    };
+
+    const human_name = Expression {
+        .kind = .Keyword,
+        .value = .{
+            .keyword = ":human/name",
+        },
+        .position = .{
+            .column = 2,
+            .line = 1
+        },
+    };
+
+    const human_size = Expression {
+        .kind = .Keyword,
+        .value = .{
+            .keyword = ":human/size",
+        },
+        .position = .{
+            .column = 37,
+            .line = 1
+        },
+    };
+
+    try expectEqual(map.value.map.get(human_age).?.value.int, 124);
+    try expectEqual(map.value.map.get(human_name).?.value.string, "Abobo");
+    try expectEqual(map.value.map.get(human_size).?.value.keyword, ":extra_large");
 }
