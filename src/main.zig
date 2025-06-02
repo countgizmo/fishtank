@@ -25,6 +25,7 @@ fn getFontPath(allocator: Allocator) ![:0]u8 {
 }
 
 pub fn main() !void {
+    rl.SetConfigFlags(rl.FLAG_WINDOW_HIGHDPI);
     rl.InitWindow(800, 600, "Fishtank");
     defer rl.CloseWindow();
     rl.SetTargetFPS(60);
@@ -35,6 +36,8 @@ pub fn main() !void {
         if (status != .ok) @panic("Memory leak detected!");
     }
 
+    const dpi = rl.GetWindowScaleDPI();
+    std.log.debug("DPI :.{any}", .{dpi});
     const font_path = try getFontPath(gpa.allocator());
     defer gpa.allocator().free(font_path);
     var font = rl.LoadFont(font_path.ptr);

@@ -16,6 +16,7 @@ const shadow_color = rl.Color{ .r = 0, .g = 0, .b = 0, .a = 40 };
 pub fn renderModule(font: rl.Font, module: Module) void {
     const pos = rl.Vector2{ .x = 100, .y = 100 };
 
+    // Shadow
     rl.DrawRectangle(
         @as(i32, @intFromFloat(pos.x + SHADOW_OFFSET)),
         @as(i32, @intFromFloat(pos.y + SHADOW_OFFSET)),
@@ -24,7 +25,7 @@ pub fn renderModule(font: rl.Font, module: Module) void {
         shadow_color
     );
 
-    // Main rectangle (white fill with black outline)
+    // Card
     rl.DrawRectangle(
         @as(i32, @intFromFloat(pos.x)),
         @as(i32, @intFromFloat(pos.y)),
@@ -33,6 +34,7 @@ pub fn renderModule(font: rl.Font, module: Module) void {
         rl.WHITE
     );
 
+    // Border
     rl.DrawRectangleLines(
         @as(i32, @intFromFloat(pos.x)),
         @as(i32, @intFromFloat(pos.y)),
@@ -41,14 +43,13 @@ pub fn renderModule(font: rl.Font, module: Module) void {
         rl.BLACK
     );
 
+    // Draw the name
     var buf: [255:0] u8 = undefined;
     const module_name = std.fmt.bufPrintZ(&buf, "{s}", .{module.name}) catch "";
     const name_pos = rl.Vector2 {
         .x = @as(i32, @intFromFloat(pos.x + TEXT_PADDING)),
         .y = @as(i32, @intFromFloat(pos.y + TEXT_PADDING)),
     };
-
-
     rl.DrawTextEx(
         font,
         module_name,
@@ -115,25 +116,6 @@ pub fn renderModule(font: rl.Font, module: Module) void {
                 rl.BLUE
             );
         }
-
-        // const = std.fmt.bufPrintZ(&buf, "{s}", .{module.name}) catch "";
-        // // Draw alias in parentheses if it's different from the last part of the namespace
-        // if (!std.mem.eql(u8, alias, full_name)) {
-        //     var alias_text = std.fmt.allocPrint(
-        //     self.module.allocator,
-        //     "({s})",
-        //     .{alias}
-        // ) catch continue;
-        //     defer self.module.allocator.free(alias_text);
-        //
-        //     ray.DrawText(
-        //     alias_text.ptr,
-        //     @as(i32, @intFromFloat(pos.x + PADDING + 8 * @as(f32, @floatFromInt(full_name.len)))),
-        //     @as(i32, @intFromFloat(pos.y + y_offset)),
-        //     16,
-        //     Color.gray
-        // );
-        // }
 
         y_offset += LINE_HEIGHT;
     }
