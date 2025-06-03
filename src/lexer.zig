@@ -282,18 +282,23 @@ pub const Lexer = struct {
     }
 
 
-    fn isValidStringCharacter(self: Lexer, ch: u8) bool {
-        return isValidSymbolCharacter(ch)
-        or isDelimiter(ch)
-        or (ch == '\\' and isValidEscape(self.peek()));
+    fn isValidStringCharacter(ch: u8) bool {
+        return isValidSymbolCharacter(ch) or isDelimiter(ch);
     }
 
     fn lexString(self: *Lexer) !TokenWithPosition {
         // No -1 cause we exclude openning quote from the value
         const start = self.cursor;
 
-        while (self.cursor < self.source.len-1 and self.isValidStringCharacter(self.peek())) {
+        const ch = self.peek();
+
+        while (self.cursor < self.source.len-1 and isValidStringCharacter(ch)) {
             _ = self.advance();
+
+            // If escape sequence we need to move two chars.
+            if (ch == '\\' and isValidEscape(ch)) {
+                _ = self.advance();
+            }
         }
 
         // String must end with "
@@ -696,4 +701,59 @@ test "lexer - simple string" {
             else => try expectEqual(expected_tokens[idx], actual_token),
         }
     }
+}
+
+test "lexer - empty string" {
+    const source = "\"\"";
+    var l = Lexer.init(testing.allocator, source);
+
+    const expected_tokens = [_]TokenWithPosition{
+        .{ .token = .{ .String = "" }, .column = 1, .line = 1},
+        .{ .token = .EOF, .column = 3, .line = 1 },
+    };
+
+    const tokens = try l.getTokens();
+    defer tokens.deinit();
+
+    for (tokens.items, 0..) |actual_token, idx| {
+        switch (actual_token.token) {
+            .String => |value| {
+                try expectEqualStrings(expected_tokens[idx].token.String, value);
+                try expectEqual(expected_tokens[idx].column, actual_token.column);
+                try expectEqual(expected_tokens[idx].line, actual_token.line);
+            },
+            else => try expectEqual(expected_tokens[idx], actual_token),
+        }
+    }
+}
+
+test "lexer - string with escape sequences" {
+    const source = "\"hello\nworld\t\"quoted\"\"";
+    var l = Lexer.init(testing.allocator, source);
+
+    const expected_tokens = [_]TokenWithPosition{
+        .{ .token = .{ .String = "hello\nworld\t\"quoted\"" }, .column = 1, .line = 1},
+        .{ .token = .EOF, .column = 26, .line = 1 },
+    };
+
+    const tokens = try l.getTokens();
+    defer tokens.deinit();
+
+    for (tokens.items, 0..) |actual_token, idx| {
+        switch (actual_token.token) {
+            .String => |value| {
+                try expectEqualStrings(expected_tokens[idx].token.String, value);
+                try expectEqual(expected_tokens[idx].column, actual_token.column);
+                try expectEqual(expected_tokens[idx].line, actual_token.line);
+            },
+            else => try expectEqual(expected_tokens[idx], actual_token),
+        }
+    }
+}
+
+test "lexer - unterminated string" {
+    const source = "\"unterminated";
+    var l = Lexer.initQuiet(testing.allocator, source);
+
+    try testing.expectError(LexerError.UnexpectedEndOfString, l.getTokens());
 }
