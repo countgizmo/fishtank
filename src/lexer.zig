@@ -286,19 +286,22 @@ pub const Lexer = struct {
         return isValidSymbolCharacter(ch) or isDelimiter(ch);
     }
 
+    fn isEscapeSequence(self: Lexer, ch: u8) bool {
+       if (self.cursor < self.source.len) {
+           return ch == '\\' and isValidEscape(self.source[self.cursor]);
+       }
+       return false;
+    }
+
     fn lexString(self: *Lexer) !TokenWithPosition {
         // No -1 cause we exclude openning quote from the value
         const start = self.cursor;
 
         const ch = self.peek();
 
-        while (self.cursor < self.source.len-1 and isValidStringCharacter(ch)) {
+        while (self.cursor < self.source.len-1 and
+               (isValidStringCharacter(ch) or self.isEscapeSequence(ch))) {
             _ = self.advance();
-
-            // If escape sequence we need to move two chars.
-            if (ch == '\\' and isValidEscape(ch)) {
-                _ = self.advance();
-            }
         }
 
         // String must end with "
@@ -728,11 +731,11 @@ test "lexer - empty string" {
 }
 
 test "lexer - string with escape sequences" {
-    const source = "\"hello\nworld\t\"quoted\"\"";
+    const source = "\"hello\nworld\t\"quoted\"\\slashed\"";
     var l = Lexer.init(testing.allocator, source);
 
     const expected_tokens = [_]TokenWithPosition{
-        .{ .token = .{ .String = "hello\nworld\t\"quoted\"" }, .column = 1, .line = 1},
+        .{ .token = .{ .String = "hello\nworld\t\"quoted\"\\slashed" }, .column = 1, .line = 1},
         .{ .token = .EOF, .column = 26, .line = 1 },
     };
 
