@@ -46,8 +46,16 @@ pub fn main() !void {
     rl.GenTextureMipmaps(&font.texture);
     rl.SetTextureFilter(font.texture, rl.TEXTURE_FILTER_BILINEAR);
 
-    var lexer = Lexer.init(gpa.allocator(),
-        "(ns my-namespace (:require [clojure.string :as str] [reaget.core]))");
+    const contents = try std.fs.cwd().readFileAlloc(
+        gpa.allocator(),
+        "test_subjects/core.clj",
+        1024 * 1024 * 10,
+    );
+    defer gpa.allocator().free(contents);
+
+    std.log.debug("Contents: \n {s}" ,.{contents});
+
+    var lexer = Lexer.init(gpa.allocator(), contents);
     const tokens = try lexer.getTokens();
     defer tokens.deinit();
 
