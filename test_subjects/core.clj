@@ -4,4 +4,4 @@
     [clojure.string :as str]
     [charred.api :as json]))
 
-(def json-rpc-version 2)
+(def json-rpc-version "2.0")
