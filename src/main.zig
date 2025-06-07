@@ -9,6 +9,7 @@ const Parser = @import("parser.zig").Parser;
 const Lexer = @import("lexer.zig").Lexer;
 const Render = @import("render.zig");
 const Allocator = std.mem.Allocator;
+const Primitives = @import("ui/primitives.zig");
 
 fn getFontPath(allocator: Allocator) ![:0]u8 {
     const exe_path = try std.fs.selfExeDirPathAlloc(allocator);
@@ -65,7 +66,7 @@ pub fn main() !void {
 
     while (!rl.WindowShouldClose()) {
         rl.BeginDrawing();
-        rl.ClearBackground(rl.WHITE);
+        rl.ClearBackground(Primitives.bg_color);
 
         Render.renderModule(font, module);
         rl.EndDrawing();
