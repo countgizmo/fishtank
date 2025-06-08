@@ -40,13 +40,17 @@ pub fn main() !void {
 
     const dpi = rl.GetWindowScaleDPI();
     std.log.debug("DPI :.{any}", .{dpi});
+
     const font_path = try getFontPath(gpa.allocator());
     defer gpa.allocator().free(font_path);
-    var font = rl.LoadFont(font_path.ptr);
-    defer rl.UnloadFont(font);
 
-    rl.GenTextureMipmaps(&font.texture);
-    rl.SetTextureFilter(font.texture, rl.TEXTURE_FILTER_BILINEAR);
+    Primitives.text_config.font = rl.LoadFont(font_path.ptr);
+    defer rl.UnloadFont(Primitives.text_config.font.?);
+
+    if (Primitives.text_config.font) |*font| {
+        rl.GenTextureMipmaps(&font.texture);
+        rl.SetTextureFilter(font.texture, rl.TEXTURE_FILTER_BILINEAR);
+    }
 
     const contents = try std.fs.cwd().readFileAlloc(
         gpa.allocator(),
@@ -70,6 +74,7 @@ pub fn main() !void {
         rl.ClearBackground(Primitives.bg_color);
 
         Components.screen(800, 600);
+        Components.label(100, 100, module.name);
         rl.EndDrawing();
     }
 }
