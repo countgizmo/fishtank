@@ -3,12 +3,13 @@ const rl = @cImport({
     @cInclude("raylib.h");
 });
 const Primitives = @import("primitives.zig");
+const UiState = @import("state.zig").UiState;
 const Widget = Primitives.Widget;
 const WidgetFlags = Primitives.WidgetFlags;
 const Rect = Primitives.Rect;
 
 
-pub fn screen(width: i32, height: i32) void {
+pub fn screen(ui: UiState, width: i32, height: i32) void {
     const widget = Widget{
         .rect = Rect{
             .x = 0,
@@ -21,15 +22,15 @@ pub fn screen(width: i32, height: i32) void {
         },
     };
 
-    Primitives.render_widget(widget);
+    Primitives.render_widget(ui, widget);
 }
 
-pub fn label(x: i32, y: i32, text: [:0]const u8) void {
+pub fn label(ui: UiState, x: i32, y: i32, text: []const u8) void {
     var buf: [255:0] u8 = undefined;
     const label_text = std.fmt.bufPrintZ(&buf, "{s}", .{text}) catch "";
 
     const text_size = rl.MeasureTextEx(
-        Primitives.text_config.font.?,
+        ui.text_config.font.?,
         label_text,
         Primitives.big_font_size,
         1);
@@ -50,5 +51,5 @@ pub fn label(x: i32, y: i32, text: [:0]const u8) void {
         },
     };
 
-    Primitives.render_widget(widget);
+    Primitives.render_widget(ui, widget);
 }

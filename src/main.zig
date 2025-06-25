@@ -11,6 +11,7 @@ const Render = @import("render.zig");
 const Allocator = std.mem.Allocator;
 const Primitives = @import("ui/primitives.zig");
 const Components = @import("ui/components.zig");
+const UiState = @import("ui/state.zig").UiState;
 
 fn getFontPath(allocator: Allocator) ![:0]u8 {
     const exe_path = try std.fs.selfExeDirPathAlloc(allocator);
@@ -44,10 +45,14 @@ pub fn main() !void {
     const font_path = try getFontPath(gpa.allocator());
     defer gpa.allocator().free(font_path);
 
-    Primitives.text_config.font = rl.LoadFont(font_path.ptr);
-    defer rl.UnloadFont(Primitives.text_config.font.?);
+    var ui = UiState{
+        .text_config = .{
+            .font = rl.LoadFont(font_path.ptr)
+        },
+    };
+    defer rl.UnloadFont(ui.text_config.font.?);
 
-    if (Primitives.text_config.font) |*font| {
+    if (ui.text_config.font) |*font| {
         rl.GenTextureMipmaps(&font.texture);
         rl.SetTextureFilter(font.texture, rl.TEXTURE_FILTER_BILINEAR);
     }
@@ -73,8 +78,8 @@ pub fn main() !void {
         rl.BeginDrawing();
         rl.ClearBackground(Primitives.bg_color);
 
-        Components.screen(800, 600);
-        Components.label(100, 100, module.name);
+        Components.screen(ui, 800, 600);
+        Components.label(ui, 100, 100, module.name);
         rl.EndDrawing();
     }
 }

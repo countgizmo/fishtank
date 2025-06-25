@@ -2,6 +2,7 @@ const std = @import("std");
 const rl = @cImport({
     @cInclude("raylib.h");
 });
+const UiState = @import("state.zig").UiState;
 
 pub const bg_color = rl.Color{
     .r = 240,
@@ -51,20 +52,13 @@ pub const Widget = struct{
     text: ?[]const u8 = null,
 };
 
-pub const TextConfig = struct{
-    font: ?rl.Font = null
-};
-
-pub var text_config = TextConfig {
-};
-
 const border_width = 2;
 const screen_padding = 2;
 pub const big_font_size = 16;
 pub const normal_font_size = 12;
 pub const label_padding = 5;
 
-pub fn render_widget(widget: Widget) void {
+pub fn render_widget(ui: UiState, widget: Widget) void {
     const body_rect = rl.Rectangle{
         .x = widget.rect.x,
         .y = widget.rect.y,
@@ -91,7 +85,7 @@ pub fn render_widget(widget: Widget) void {
             .y = widget.rect.y
         };
         rl.DrawTextEx(
-            text_config.font.?,
+            ui.text_config.font.?,
             label_text,
             text_pos ,
             big_font_size,
