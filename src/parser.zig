@@ -23,6 +23,16 @@ pub const RequiredLib = struct {
     //TODO(evgheni): add refer, as-alias, etc.
 };
 
+pub const Position = struct {
+    line: usize,
+    column: usize,
+};
+
+pub const Function = struct {
+    name: []const u8,
+    position: Position,
+};
+
 // Represents a Clojure file
 pub const Module = struct {
     name: []const u8,
@@ -30,6 +40,7 @@ pub const Module = struct {
 
     required_modules: ArrayList(RequiredLib),
     expressions: ArrayList(Expression),
+    functions: ArrayList(Function),
 
 
     //TODO(evgheni): add more meta data like line counts, etc.
@@ -40,6 +51,7 @@ pub const Module = struct {
             .file_path = file_path,
             .required_modules = ArrayList(RequiredLib).init(allocator),
             .expressions = ArrayList(Expression).init(allocator),
+            .functions = ArrayList(Function).init(allocator),
         };
     }
 
@@ -48,8 +60,8 @@ pub const Module = struct {
             expression.deinit();
         }
         self.expressions.deinit();
-
         self.required_modules.deinit();
+        self.functions.deinit();
     }
 
     pub fn addRequiredLib(self: *Module, lib: RequiredLib) !void {
@@ -86,10 +98,7 @@ pub const Expression = struct {
         map: HashMap(Expression, Expression, Expression.HashContext, 80),
     },
 
-    position: struct {
-        line: usize,
-        column: usize,
-    },
+    position: Position,
 
     // fn hashExpression(expr: Expression) u64 {
     //     var hasher = std.hash.Wyhash.init(0);
@@ -269,6 +278,14 @@ pub const Parser = struct {
         return false;
     }
 
+    fn isDefn(expression: Expression) bool {
+        if (expression.kind == .List) {
+            return std.mem.eql(u8, "defn", expression.value.list.items[0].value.symbol);
+        }
+
+        return false;
+    }
+
     // This is what we're aiming at initially
     // (ns my-namespace
     //   "Optional docstring"
@@ -333,6 +350,15 @@ pub const Parser = struct {
         }
     }
 
+    fn parseDefn(module: *Module, expression: Expression) !void {
+        const defn = Function{
+            .name = expression.value.list.items[1].value.symbol,
+            .position = expression.position,
+        };
+
+        try module.functions.append(defn);
+    }
+
     pub fn parse(self: *Parser, file_path: []const u8) !Module {
         if (self.tokens.len == 0) {
             return ParseError.UnexpectedEOF;
@@ -348,6 +374,8 @@ pub const Parser = struct {
                     const expression = try self.parseExpression();
                     if (std.mem.eql(u8, module.name, "") and isNs(expression)) {
                         try parseNs(&module, expression);
+                    } else if (isDefn(expression)) {
+                        try parseDefn(&module, expression);
                     }
                     try module.addExpression(expression);
                 },
