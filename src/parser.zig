@@ -32,7 +32,7 @@ pub const Module = struct {
     expressions: ArrayList(Expression),
 
 
-    //TODO(evgheni): add more meta data like the list of requires, line counts, etc.
+    //TODO(evgheni): add more meta data like line counts, etc.
 
     pub fn init(allocator: Allocator, file_path: []const u8) !Module {
         return Module{
@@ -62,7 +62,7 @@ pub const Module = struct {
 };
 
 
-//TODO(evgheni): Add maps, sets, vectors
+//TODO(evgheni): Add sets
 const ExpressionKind = enum {
     List,
     String,
