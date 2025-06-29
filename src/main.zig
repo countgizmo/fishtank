@@ -54,7 +54,7 @@ pub fn main() !void {
 
     if (ui.text_config.font) |*font| {
         rl.GenTextureMipmaps(&font.texture);
-        rl.SetTextureFilter(font.texture, rl.TEXTURE_FILTER_BILINEAR);
+        rl.SetTextureFilter(font.texture, rl.TEXTURE_FILTER_TRILINEAR);
     }
 
     const contents = try std.fs.cwd().readFileAlloc(
@@ -79,7 +79,16 @@ pub fn main() !void {
         rl.ClearBackground(Primitives.bg_color);
 
         Components.screen(ui, 800, 600);
+        Components.header(ui, 20, 100, "Module:");
         Components.label(ui, 100, 100, module.name);
+
+        Components.header(ui, 20, 120, "Functions:");
+
+
+        for (module.functions.items, 0..) |defn, idx| {
+            const step = @as(i32, @intCast(idx * 20));
+            Components.label(ui, 40, 140+step, defn.name);
+        }
         rl.EndDrawing();
     }
 }
