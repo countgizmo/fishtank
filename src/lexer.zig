@@ -91,7 +91,7 @@ pub const Lexer = struct {
     fn isSymbolBegins(self: Lexer, ch: u8) bool {
         // If -, + or . are the first character, the second character (if any) must be non-numeric.
         if ((ch == '-' or ch == '+' or ch == '.') ) {
-            if (std.ascii.isAlphabetic(self.peek()) or self.peek() == '>') {
+            if (std.ascii.isAlphabetic(self.peek()) or self.peek() == '>' or self.peek() == ' ') {
                 return true;
             } else {
                 return false;
