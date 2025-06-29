@@ -9,3 +9,7 @@
 (defn add
   [a b]
   (+ a b))
+
+(defn minus
+  [a b]
+  (- a b))
