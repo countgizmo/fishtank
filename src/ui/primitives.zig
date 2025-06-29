@@ -54,8 +54,8 @@ pub const Widget = struct{
 
 const border_width = 2;
 const screen_padding = 2;
-pub const big_font_size = 16;
-pub const normal_font_size = 12;
+pub const big_font_size = 24;
+pub const normal_font_size = 20;
 pub const label_padding = 5;
 
 pub fn render_widget(ui: UiState, widget: Widget) void {
