@@ -25,7 +25,7 @@ pub fn screen(ui: UiState, width: i32, height: i32) void {
     Primitives.render_widget(ui, widget);
 }
 
-pub fn header(ui: UiState, x: i32, y: i32, text: []const u8) void {
+pub fn header(ui: *UiState, x: i32, y: i32, text: []const u8) void {
     var buf: [255:0] u8 = undefined;
     const label_text = std.fmt.bufPrintZ(&buf, "{s}", .{text}) catch "";
 
@@ -35,6 +35,9 @@ pub fn header(ui: UiState, x: i32, y: i32, text: []const u8) void {
         Primitives.big_font_size,
         1);
 
+
+    ui.active_text_style.font_size = Primitives.big_font_size;
+
     const label_x = @as(f32, @floatFromInt(x));
     const label_y = @as(f32, @floatFromInt(y));
     const widget = Widget{
@@ -50,11 +53,11 @@ pub fn header(ui: UiState, x: i32, y: i32, text: []const u8) void {
         },
     };
 
-    Primitives.render_widget(ui, widget);
+    Primitives.render_widget(ui.*, widget);
 }
 
 
-pub fn label(ui: UiState, x: i32, y: i32, text: []const u8) void {
+pub fn label(ui: *UiState, x: i32, y: i32, text: []const u8) void {
     var buf: [255:0] u8 = undefined;
     const label_text = std.fmt.bufPrintZ(&buf, "{s}", .{text}) catch "";
 
@@ -64,6 +67,8 @@ pub fn label(ui: UiState, x: i32, y: i32, text: []const u8) void {
         Primitives.normal_font_size,
         1);
 
+    ui.active_text_style.font_size = Primitives.normal_font_size;
+
     const label_x = @as(f32, @floatFromInt(x));
     const label_y = @as(f32, @floatFromInt(y));
     const widget = Widget{
@@ -79,5 +84,5 @@ pub fn label(ui: UiState, x: i32, y: i32, text: []const u8) void {
         },
     };
 
-    Primitives.render_widget(ui, widget);
+    Primitives.render_widget(ui.*, widget);
 }

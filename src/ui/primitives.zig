@@ -54,8 +54,8 @@ pub const Widget = struct{
 
 const border_width = 2;
 const screen_padding = 2;
-pub const big_font_size = 24;
-pub const normal_font_size = 20;
+pub const big_font_size = 22;
+pub const normal_font_size = 18;
 pub const label_padding = 5;
 
 pub fn render_widget(ui: UiState, widget: Widget) void {
@@ -88,7 +88,7 @@ pub fn render_widget(ui: UiState, widget: Widget) void {
             ui.text_config.font.?,
             label_text,
             text_pos ,
-            big_font_size,
+            @as(f32, @floatFromInt(ui.active_text_style.font_size)),
             0,
             text_color);
     }
