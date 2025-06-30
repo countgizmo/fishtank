@@ -3,3 +3,4 @@ zig-out
 .DS_Store
 .clj-kondo
 .lsp
+.nrepl-port
