@@ -12,6 +12,7 @@ const Allocator = std.mem.Allocator;
 const Primitives = @import("ui/primitives.zig");
 const Components = @import("ui/components.zig");
 const UiState = @import("ui/state.zig").UiState;
+const Project = @import("project.zig").Project;
 
 fn getFontPath(allocator: Allocator) ![:0]u8 {
     const exe_path = try std.fs.selfExeDirPathAlloc(allocator);
@@ -63,7 +64,7 @@ pub fn main() !void {
 
     const contents = try std.fs.cwd().readFileAlloc(
         gpa.allocator(),
-        "test_subjects/core.clj",
+        "test_subjects/very_simple_project/core.clj",
         1024 * 1024 * 10,
     );
     defer gpa.allocator().free(contents);
@@ -77,6 +78,10 @@ pub fn main() !void {
     var parser = Parser.init(gpa.allocator(), tokens.items);
     var module = try parser.parse("test_file.clj");
     defer module.deinit();
+
+    var project = try Project.init(gpa.allocator());
+    try project.analyze("test_subjects/very_simple_project");
+    defer project.deinit();
 
     while (!rl.WindowShouldClose()) {
         rl.BeginDrawing();

@@ -46,7 +46,7 @@ pub const Module = struct {
     //TODO(evgheni): add more meta data like line counts, etc.
 
     pub fn init(allocator: Allocator, file_path: []const u8) !Module {
-        return Module{
+        return Module {
             .name = "",
             .file_path = file_path,
             .required_modules = ArrayList(RequiredLib).init(allocator),
