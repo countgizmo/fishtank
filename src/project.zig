@@ -2,6 +2,8 @@ const std = @import("std");
 const Allocator = std.mem.Allocator;
 const ArrayList = std.ArrayList;
 const Module = @import("parser.zig").Module;
+const Parser = @import("parser.zig").Parser;
+const Lexer = @import("lexer.zig").Lexer;
 
 pub const Project = struct {
     allocator: Allocator,
@@ -15,6 +17,9 @@ pub const Project = struct {
     }
 
     pub fn deinit(self: *Project) void {
+        for (self.modules.items) |*module| {
+            module.deinit();
+        }
         self.modules.deinit();
     }
 
@@ -26,7 +31,7 @@ pub const Project = struct {
         );
     }
 
-    pub fn analyze(self: Project, folder_path: []const u8) !void {
+    pub fn analyze(self: *Project, folder_path: []const u8) !void {
         var dir = try std.fs.cwd().openDir(folder_path, .{ .iterate = true });
         defer dir.close();
 
@@ -39,7 +44,16 @@ pub const Project = struct {
 
                 const file_path = try std.fmt.bufPrint(&path_buffer, "{s}/{s}", .{ folder_path, entry.name });
                 const contents = try self.getcontent(file_path);
-                std.log.debug("Contents: \n {s}" ,.{contents});
+
+                var lexer = Lexer.init(self.allocator, contents);
+                const tokens = try lexer.getTokens();
+                defer tokens.deinit();
+
+                var parser = Parser.init(self.allocator, tokens.items);
+                const module = try parser.parse(file_path);
+                try self.modules.append(module);
+
+                std.log.debug("Contents: \n {s}" ,.{module.name});
                 self.allocator.free(contents);
             }
         }
