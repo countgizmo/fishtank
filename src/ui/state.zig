@@ -14,5 +14,8 @@ pub const ActiveTextStyle = struct{
 pub const UiState = struct{
     text_config: TextConfig,
     active_text_style: ActiveTextStyle,
+    margin: i32 = 10,
+    next_x: i32 = 0,
+    next_y: i32 = 0,
 };
 

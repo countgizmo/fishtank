@@ -88,25 +88,7 @@ pub fn main() !void {
         rl.ClearBackground(Primitives.bg_color);
 
         Components.screen(ui, 800, 600);
-        Components.header(&ui, 20, 100, "Module:");
-        Components.header(&ui, 100, 100, module.name);
-
-        Components.header(&ui, 20, 120, "Requires");
-        for (module.required_modules.items, 0..) |req, idx| {
-            const step = @as(i32, @intCast(idx * 20));
-            Components.label(&ui, 40, 140+step, req.name);
-
-            if (req.as) |alias| {
-                Components.label(&ui, 40+170, 140 + step, "->");
-                Components.label(&ui, 40+200, 140 + step, alias);
-            }
-        }
-
-        Components.header(&ui, 20, 220, "Functions:");
-        for (module.functions.items, 0..) |defn, idx| {
-            const step = @as(i32, @intCast(idx * 20));
-            Components.label(&ui, 40, 240+step, defn.name);
-        }
+        project.render(&ui);
         rl.EndDrawing();
     }
 }

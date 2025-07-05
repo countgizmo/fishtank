@@ -7,6 +7,8 @@ const Allocator = std.mem.Allocator;
 const token_module = @import("token.zig");
 const Token = token_module.Token;
 const TokenWithPosition = token_module.TokenWithPosition;
+const Components = @import("ui/components.zig");
+const UiState = @import("ui/state.zig").UiState;
 
 // Main idea:
 // Read a Clojure file
@@ -71,8 +73,31 @@ pub const Module = struct {
     pub fn addExpression(self: *Module, expr: Expression) !void {
         try self.expressions.append(expr);
     }
-};
 
+    pub fn render(self: Module, ui: *UiState) void {
+        Components.header(ui, ui.next_x + 20, 100, "Module:");
+        Components.header(ui, ui.next_x + 100, 100, self.name);
+
+        if (self.required_modules.items.len > 0) {
+            Components.header(ui, ui.next_x + 20, 120, "Requires:");
+            for (self.required_modules.items, 0..) |req, idx| {
+                const step = @as(i32, @intCast(idx * 20));
+                Components.label(ui, ui.next_x + 40, 140+step, req.name);
+
+                if (req.as) |alias| {
+                    Components.label(ui, ui.next_x + 40+170, 140 + step, "->");
+                    Components.label(ui, ui.next_x + 40+200, 140 + step, alias);
+                }
+            }
+        }
+
+        Components.header(ui, ui.next_x + 20, 220, "Functions:");
+        for (self.functions.items, 0..) |defn, idx| {
+            const step = @as(i32, @intCast(idx * 20));
+            Components.label(ui, ui.next_x + 40, 240+step, defn.name);
+        }
+    }
+};
 
 //TODO(evgheni): Add sets
 const ExpressionKind = enum {

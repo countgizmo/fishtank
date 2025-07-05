@@ -4,14 +4,18 @@ const ArrayList = std.ArrayList;
 const Module = @import("parser.zig").Module;
 const Parser = @import("parser.zig").Parser;
 const Lexer = @import("lexer.zig").Lexer;
+const Components = @import("ui/components.zig");
+const UiState = @import("ui/state.zig").UiState;
 
 pub const Project = struct {
     allocator: Allocator,
+    arena: std.heap.ArenaAllocator,
     modules: ArrayList(Module),
 
     pub fn init(allocator: Allocator) !Project {
         return Project {
             .allocator = allocator,
+            .arena = std.heap.ArenaAllocator.init(allocator),
             .modules = ArrayList(Module).init(allocator),
         };
     }
@@ -21,11 +25,13 @@ pub const Project = struct {
             module.deinit();
         }
         self.modules.deinit();
+
+        self.arena.deinit();
     }
 
-    fn getcontent(self: Project, file_path: []const u8) ![]u8 {
+    fn getcontent(self: *Project, file_path: []const u8) ![]u8 {
         return try std.fs.cwd().readFileAlloc(
-            self.allocator,
+            self.arena.allocator(),
             file_path,
             1024 * 1024 * 10,
         );
@@ -53,12 +59,17 @@ pub const Project = struct {
                 const module = try parser.parse(file_path);
                 try self.modules.append(module);
 
-                std.log.debug("Contents: \n {s}" ,.{module.name});
-                self.allocator.free(contents);
+                // self.allocator.free(contents);
             }
         }
     }
 
+    pub fn render(self: Project, ui: *UiState) void {
+        for (self.modules.items, 0..) |module, idx| {
+            ui.next_x = ui.margin + @as(i32, @intCast(idx * 400));
+            module.render(ui);
+        }
+    }
 };
 
 
