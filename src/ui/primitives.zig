@@ -52,8 +52,8 @@ pub const Widget = struct{
     text: ?[]const u8 = null,
 };
 
-const border_width = 2;
-const screen_padding = 2;
+pub const border_width = 2;
+pub const screen_padding = 2;
 pub const big_font_size = 22;
 pub const normal_font_size = 18;
 pub const label_padding = 5;

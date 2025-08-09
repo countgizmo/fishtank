@@ -58,8 +58,6 @@ pub const Project = struct {
                 var parser = Parser.init(self.allocator, tokens.items);
                 const module = try parser.parse(file_path);
                 try self.modules.append(module);
-
-                // self.allocator.free(contents);
             }
         }
     }

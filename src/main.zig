@@ -9,10 +9,13 @@ const Parser = @import("parser.zig").Parser;
 const Lexer = @import("lexer.zig").Lexer;
 const Render = @import("render.zig");
 const Allocator = std.mem.Allocator;
+const ArrayList = std.ArrayList;
 const Primitives = @import("ui/primitives.zig");
 const Components = @import("ui/components.zig");
 const UiState = @import("ui/state.zig").UiState;
 const Project = @import("project.zig").Project;
+const treemap = @import("ui/treemap.zig");
+const TreemapItem = treemap.TreemapItem;
 
 fn getFontPath(allocator: Allocator) ![:0]u8 {
     const exe_path = try std.fs.selfExeDirPathAlloc(allocator);
@@ -28,9 +31,12 @@ fn getFontPath(allocator: Allocator) ![:0]u8 {
     return allocator.dupeZ(u8, path);
 }
 
+pub const width = 800;
+pub const height = 600;
+
 pub fn main() !void {
     rl.SetConfigFlags(rl.FLAG_WINDOW_HIGHDPI);
-    rl.InitWindow(800, 600, "Fishtank");
+    rl.InitWindow(width, height, "Fishtank");
     defer rl.CloseWindow();
     rl.SetTargetFPS(60);
 
@@ -83,12 +89,25 @@ pub fn main() !void {
     try project.analyze("test_subjects/very_simple_project");
     defer project.deinit();
 
+    var treeMapItems = ArrayList(TreemapItem).init(gpa.allocator());
+    defer treeMapItems.deinit();
+
+    for (project.modules.items) |project_module| {
+        const mapitem = TreemapItem {
+            .name = project_module.name,
+            .weight = @as(f32, @floatFromInt(project_module.functions.items.len)),
+        };
+        try treeMapItems.append(mapitem);
+    }
+
     while (!rl.WindowShouldClose()) {
         rl.BeginDrawing();
         rl.ClearBackground(Primitives.bg_color);
 
         Components.screen(ui, 800, 600);
-        project.render(&ui);
+        // project.render(&ui);
+        treemap.render(ui, width, height, treeMapItems.items);
+
         rl.EndDrawing();
     }
 }
