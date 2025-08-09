@@ -1,7 +1,8 @@
 const std = @import("std");
 const UiState = @import("state.zig").UiState;
-
 const primitives = @import("primitives.zig");
+const Components = @import("components.zig");
+
 
 pub const TreemapItem = struct {
     name: []const u8,
@@ -17,7 +18,7 @@ fn compareByWeight(_: void, a: TreemapItem, b: TreemapItem) bool {
     return a.weight > b.weight;
 }
 
-pub fn render(ui: UiState, window_width: i32, window_height: i32, items: []TreemapItem) void {
+pub fn render(ui: *UiState, window_width: i32, window_height: i32, items: []TreemapItem) void {
     var split: SplitStrategy = .horizontal;
 
     std.mem.sort(TreemapItem, items, {}, compareByWeight);
@@ -56,7 +57,11 @@ pub fn render(ui: UiState, window_width: i32, window_height: i32, items: []Treem
                     .text = item.name,
                 };
 
-                primitives.render_widget(ui, widget);
+                primitives.render_widget(ui.*, widget);
+                const label_x = @as(i32, @intFromFloat(current_x + 20));
+                const label_y = @as(i32, @intFromFloat(current_y + 20));
+                Components.label(ui, label_x, label_y, item.name);
+
 
                 // Getting ready for the next item.
                 split = .vertical;
@@ -84,7 +89,10 @@ pub fn render(ui: UiState, window_width: i32, window_height: i32, items: []Treem
                     .text = item.name,
                 };
 
-                primitives.render_widget(ui, widget);
+                primitives.render_widget(ui.*, widget);
+                const label_x = @as(i32, @intFromFloat(current_x + 20));
+                const label_y = @as(i32, @intFromFloat(current_y + 20));
+                Components.label(ui, label_x, label_y, item.name);
 
                 // Getting ready for the next item.
                 split = .horizontal;

@@ -106,7 +106,7 @@ pub fn main() !void {
 
         Components.screen(ui, 800, 600);
         // project.render(&ui);
-        treemap.render(ui, width, height, treeMapItems.items);
+        treemap.render(&ui, width, height, treeMapItems.items);
 
         rl.EndDrawing();
     }
