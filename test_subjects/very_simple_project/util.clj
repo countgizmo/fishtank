@@ -7,3 +7,7 @@
 (defn add-two-numbers
   [x y]
   (+ x y))
+
+(defn multiply-two-numbers
+  [x y]
+  (* x y))

@@ -29,17 +29,16 @@ pub fn render(ui: UiState, window_width: i32, window_height: i32, items: []Treem
 
 
     var current_x: f32 = 0;
-    const current_y: f32 = 0;
+    var current_y: f32 = 0;
 
-    const container_width = @as(f32, @floatFromInt(window_width));
-    const container_height = @as(f32, @floatFromInt(window_height));
+    var container_width = @as(f32, @floatFromInt(window_width));
+    var container_height = @as(f32, @floatFromInt(window_height));
 
     for (items) |item| {
         switch (split) {
             .horizontal => {
-                split = .vertical;
 
-                const current_width = container_width/total_weight*item.weight;
+                const current_width = container_width / total_weight * item.weight;
 
                 const current_rect = primitives.Rect {
                     .height = container_height,
@@ -48,7 +47,6 @@ pub fn render(ui: UiState, window_width: i32, window_height: i32, items: []Treem
                     .y = current_y,
                 };
 
-                current_x += current_width;
 
                 const widget = primitives.Widget{
                     .rect = current_rect,
@@ -57,13 +55,42 @@ pub fn render(ui: UiState, window_width: i32, window_height: i32, items: []Treem
                     },
                     .text = item.name,
                 };
-                std.log.debug("Text = {s}", .{item.name});
 
                 primitives.render_widget(ui, widget);
+
+                // Getting ready for the next item.
+                split = .vertical;
+                current_x += current_width;
+                container_width = container_width - current_width;
+                total_weight -= item.weight;
             },
             .vertical => {
+
+                const current_height = container_height / total_weight * item.weight;
+
+                const current_rect = primitives.Rect {
+                    .height = current_height,
+                    .width = container_width,
+                    .x = current_x,
+                    .y = current_y,
+                };
+
+
+                const widget = primitives.Widget{
+                    .rect = current_rect,
+                    .flags = .{
+                        .has_border = true,
+                    },
+                    .text = item.name,
+                };
+
+                primitives.render_widget(ui, widget);
+
+                // Getting ready for the next item.
                 split = .horizontal;
-                std.log.debug("Text = {s}", .{item.name});
+                current_y += current_height;
+                container_height = container_height - current_height;
+                total_weight -= item.weight;
             },
         }
     }
