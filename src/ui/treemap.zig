@@ -38,7 +38,6 @@ pub fn render(ui: *UiState, window_width: i32, window_height: i32, items: []Tree
     for (items) |item| {
         switch (split) {
             .horizontal => {
-
                 const current_width = container_width / total_weight * item.weight;
 
                 const current_rect = primitives.Rect {
@@ -48,20 +47,7 @@ pub fn render(ui: *UiState, window_width: i32, window_height: i32, items: []Tree
                     .y = current_y,
                 };
 
-
-                const widget = primitives.Widget{
-                    .rect = current_rect,
-                    .flags = .{
-                        .has_border = true,
-                    },
-                    .text = item.name,
-                };
-
-                primitives.render_widget(ui.*, widget);
-                const label_x = @as(i32, @intFromFloat(current_x + 20));
-                const label_y = @as(i32, @intFromFloat(current_y + 20));
-                Components.label(ui, label_x, label_y, item.name);
-
+                Components.treemapitem(ui, current_rect, item.name);
 
                 // Getting ready for the next item.
                 split = .vertical;
@@ -70,7 +56,6 @@ pub fn render(ui: *UiState, window_width: i32, window_height: i32, items: []Tree
                 total_weight -= item.weight;
             },
             .vertical => {
-
                 const current_height = container_height / total_weight * item.weight;
 
                 const current_rect = primitives.Rect {
@@ -80,19 +65,7 @@ pub fn render(ui: *UiState, window_width: i32, window_height: i32, items: []Tree
                     .y = current_y,
                 };
 
-
-                const widget = primitives.Widget{
-                    .rect = current_rect,
-                    .flags = .{
-                        .has_border = true,
-                    },
-                    .text = item.name,
-                };
-
-                primitives.render_widget(ui.*, widget);
-                const label_x = @as(i32, @intFromFloat(current_x + 20));
-                const label_y = @as(i32, @intFromFloat(current_y + 20));
-                Components.label(ui, label_x, label_y, item.name);
+                Components.treemapitem(ui, current_rect, item.name);
 
                 // Getting ready for the next item.
                 split = .horizontal;

@@ -117,3 +117,16 @@ pub fn graphnode(ui: *UiState, x: i32, y: i32, text: []const u8) void {
 
     Primitives.render_widget(ui.*, widget);
 }
+
+pub fn treemapitem(ui: *UiState, rect: Primitives.Rect, text: []const u8) void {
+    const widget = Primitives.Widget{
+        .rect = rect,
+        .flags = .{
+            .has_border = true,
+            .has_text = true,
+        },
+        .text = text,
+    };
+
+    Primitives.render_widget(ui.*, widget);
+}

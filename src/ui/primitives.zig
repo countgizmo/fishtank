@@ -56,7 +56,7 @@ pub const border_width = 2;
 pub const screen_padding = 2;
 pub const big_font_size = 22;
 pub const normal_font_size = 18;
-pub const label_padding = 5;
+pub const text_padding = 5;
 
 pub fn render_widget(ui: UiState, widget: Widget) void {
     const body_rect = rl.Rectangle{
@@ -81,8 +81,8 @@ pub fn render_widget(ui: UiState, widget: Widget) void {
         var buf: [255:0] u8 = undefined;
         const label_text = std.fmt.bufPrintZ(&buf, "{s}", .{widget.text.?}) catch "";
         const text_pos = rl.Vector2{
-            .x = widget.rect.x,
-            .y = widget.rect.y
+            .x = widget.rect.x + text_padding,
+            .y = widget.rect.y + text_padding
         };
         rl.DrawTextEx(
             ui.text_config.font.?,
