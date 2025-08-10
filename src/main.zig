@@ -38,16 +38,14 @@ pub fn main() !void {
     rl.SetConfigFlags(rl.FLAG_WINDOW_HIGHDPI);
     rl.InitWindow(width, height, "Fishtank");
     defer rl.CloseWindow();
-    rl.SetTargetFPS(60);
+    rl.SetTargetFPS(30);
+    rl.EnableEventWaiting();
 
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer {
         const status = gpa.deinit();
         if (status != .ok) @panic("Memory leak detected!");
     }
-
-    const dpi = rl.GetWindowScaleDPI();
-    std.log.debug("DPI :.{any}", .{dpi});
 
     const font_path = try getFontPath(gpa.allocator());
     defer gpa.allocator().free(font_path);
@@ -67,23 +65,6 @@ pub fn main() !void {
         rl.GenTextureMipmaps(&font.texture);
         rl.SetTextureFilter(font.texture, rl.TEXTURE_FILTER_TRILINEAR);
     }
-
-    const contents = try std.fs.cwd().readFileAlloc(
-        gpa.allocator(),
-        "test_subjects/very_simple_project/core.clj",
-        1024 * 1024 * 10,
-    );
-    defer gpa.allocator().free(contents);
-
-    std.log.debug("Contents: \n {s}" ,.{contents});
-
-    var lexer = Lexer.init(gpa.allocator(), contents);
-    const tokens = try lexer.getTokens();
-    defer tokens.deinit();
-
-    var parser = Parser.init(gpa.allocator(), tokens.items);
-    var module = try parser.parse("test_file.clj");
-    defer module.deinit();
 
     var project = try Project.init(gpa.allocator());
     try project.analyze("test_subjects/very_simple_project");

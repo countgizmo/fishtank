@@ -46,8 +46,6 @@ pub const Project = struct {
         var iterator = dir.iterate();
         while (try iterator.next()) |entry| {
             if (entry.kind == .file and std.mem.endsWith(u8, entry.name, ".clj")) {
-                std.log.info("Found Clojure file: {s}", .{entry.name});
-
                 const file_path = try std.fmt.bufPrint(&path_buffer, "{s}/{s}", .{ folder_path, entry.name });
                 const contents = try self.getcontent(file_path);
 
