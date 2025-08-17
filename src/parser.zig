@@ -99,7 +99,6 @@ pub const Module = struct {
     }
 };
 
-//TODO(evgheni): Add sets
 const ExpressionKind = enum {
     List,
     String,
@@ -107,7 +106,8 @@ const ExpressionKind = enum {
     Int,
     Keyword,
     Vector,
-    Map
+    Map,
+    Set
 };
 
 pub const Expression = struct {
@@ -121,6 +121,7 @@ pub const Expression = struct {
         string: []const u8,
         vector: ArrayList(Expression),
         map: HashMap(Expression, Expression, Expression.HashContext, 80),
+        set: ArrayList(Expression),
     },
 
     position: Position,
@@ -173,6 +174,16 @@ pub const Expression = struct {
                 .kind = kind,
                 .value = .{
                     .list = ArrayList(Expression).init(allocator),
+                },
+                .position = .{
+                    .line = token.line,
+                    .column = token.column,
+                },
+            },
+            .Set => Expression {
+                .kind = kind,
+                .value = .{
+                    .set = ArrayList(Expression).init(allocator),
                 },
                 .position = .{
                     .line = token.line,
@@ -269,6 +280,12 @@ pub const Expression = struct {
 
                 self.value.map.deinit();
             },
+            .Set => {
+                for (self.value.set.items) |*expr| {
+                    expr.deinit();
+                }
+                self.value.set.deinit();
+            },
             else => {}, // Other types don't own memory
         }
     }
@@ -278,6 +295,7 @@ pub const ParseError = error{
     UnexpectedToken,
     UnexpectedEOF,
     UnbalancedParentheses,
+    UnbalancedBraces,
     OutOfMemory,
     UnclosedMap,
     UneventMapItems,
@@ -440,6 +458,17 @@ pub const Parser = struct {
                 expr.quoted = true;
                 break :blk expr;
             },
+            .Hash => {
+                _ = self.advance();
+                const next = self.peek() orelse return ParseError.UnexpectedEOF;
+                return switch (next.token) {
+                    .LeftBrace => self.parseSet(),
+                    // TODO(evgheni):
+                    // .Underscore => self.parseDiscard(),
+                    // .Symbol => self.parseTagged(),
+                    else => ParseError.UnexpectedToken,
+                };
+            },
 
             else => ParseError.UnexpectedToken,
         };
@@ -523,6 +552,28 @@ pub const Parser = struct {
                     }
 
                     is_key = !is_key;
+                },
+            }
+        }
+
+        return ParseError.UnexpectedEOF;
+    }
+
+    fn parseSet(self: *Parser) ParseError!Expression {
+        const set_start = self.advance() orelse return ParseError.UnexpectedEOF;
+        var set_expression = try Expression.create(self.allocator, .Set, set_start);
+        errdefer set_expression.deinit();
+
+        while (self.peek()) |current_token| {
+            switch (current_token.token) {
+                .RightBrace => {
+                    _ = self.advance();
+                    return set_expression;
+                },
+                .EOF => return ParseError.UnbalancedBraces,
+                else => {
+                    const expression = try self.parseExpression();
+                    try set_expression.value.set.append(expression);
                 },
             }
         }
@@ -768,4 +819,48 @@ test "parse quoted list" {
     try testing.expectEqual(expr.kind, .List);
     try testing.expectEqual(expr.quoted, true);
     try testing.expectEqual(expr.value.list.items.len, 2);
+}
+
+test "parse a simple set" {
+    const tokens = [_]TokenWithPosition{
+        // #{:a :b :c}
+        .{ .token = .Hash, .line = 1, .column = 1 },
+        .{ .token = .LeftBrace, .line = 1, .column = 2 },
+        .{ .token = .{ .Keyword = ":a" }, .line = 1, .column = 3 },
+        .{ .token = .{ .Keyword = ":b" }, .line = 1, .column = 6 },
+        .{ .token = .{ .Keyword = ":c" }, .line = 1, .column = 9 },
+        .{ .token = .RightBrace, .line = 1, .column = 11 },
+        .{ .token = .EOF, .line = 1, .column = 12 },
+    };
+
+    var parser = Parser.init(testing.allocator, &tokens);
+    var module = try parser.parse("test_file.clj");
+    defer module.deinit();
+
+    const set_expr = module.expressions.items[0];
+    try testing.expectEqual(set_expr.kind, .Set);
+    try testing.expectEqual(3, set_expr.value.set.items.len);
+
+    // Check that all keywords are in the set
+    const key_a = Expression {
+        .kind = .Keyword,
+        .value = .{ .keyword = ":a" },
+        .position = .{ .line = 1, .column = 3 },
+    };
+
+    const key_b = Expression {
+        .kind = .Keyword,
+        .value = .{ .keyword = ":b" },
+        .position = .{ .line = 1, .column = 6 },
+    };
+
+    const key_c = Expression {
+        .kind = .Keyword,
+        .value = .{ .keyword = ":c" },
+        .position = .{ .line = 1, .column = 9 },
+    };
+
+    try testing.expectEqual(key_a, set_expr.value.set.items[0]);
+    try testing.expectEqual(key_b, set_expr.value.set.items[1]);
+    try testing.expectEqual(key_c, set_expr.value.set.items[2]);
 }

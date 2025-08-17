@@ -18,6 +18,7 @@ pub const Token = union(enum) {
     True,
     False,
     Quote,
+    Hash,
 
     EOF,
 };
