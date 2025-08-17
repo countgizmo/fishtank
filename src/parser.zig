@@ -477,12 +477,14 @@ pub const Parser = struct {
     fn parseList(self: *Parser) ParseError!Expression {
         const left_paren = self.advance() orelse return ParseError.UnexpectedEOF;
         var list_expression = try Expression.create(self.allocator, .List, left_paren);
-        errdefer list_expression.deinit();
+        var should_cleanup = true;
+        defer if (should_cleanup) list_expression.deinit();
 
         while (self.peek()) |current_token| {
             switch (current_token.token) {
                 .RightParen => {
                     _ = self.advance();
+                    should_cleanup = false;
                     return list_expression;
                 },
                 .EOF => return ParseError.UnbalancedParentheses,
@@ -498,19 +500,21 @@ pub const Parser = struct {
 
     fn parseVector(self: *Parser) ParseError!Expression {
         const left_bracket = self.advance() orelse return ParseError.UnexpectedEOF;
-        var list_expression = try Expression.create(self.allocator, .Vector, left_bracket);
-        errdefer list_expression.deinit();
+        var vector_expression = try Expression.create(self.allocator, .Vector, left_bracket);
+        var should_cleanup = true;
+        defer if (should_cleanup) vector_expression.deinit();
 
         while (self.peek()) |current_token| {
             switch (current_token.token) {
                 .RightBracket => {
                     _ = self.advance();
-                    return list_expression;
+                    should_cleanup = true;
+                    return vector_expression;
                 },
                 .EOF => return ParseError.UnbalancedParentheses,
                 else => {
                     const expression = try self.parseExpression();
-                    try list_expression.value.vector.append(expression);
+                    try vector_expression.value.vector.append(expression);
                 },
             }
         }
@@ -521,7 +525,8 @@ pub const Parser = struct {
     fn parseMap(self: *Parser) ParseError!Expression {
         const left_brace = self.advance() orelse return ParseError.UnexpectedEOF;
         var map_expression = try Expression.create(self.allocator, .Map, left_brace);
-        errdefer map_expression.deinit();
+        var should_cleanup = true;
+        defer if (should_cleanup) map_expression.deinit();
 
         var is_key = true;
         var key: ?Expression = null;
@@ -535,6 +540,7 @@ pub const Parser = struct {
                     }
 
                     _ = self.advance();
+                    should_cleanup = true;
                     return map_expression;
                 },
                 .EOF => return ParseError.UnclosedMap,
@@ -562,12 +568,14 @@ pub const Parser = struct {
     fn parseSet(self: *Parser) ParseError!Expression {
         const set_start = self.advance() orelse return ParseError.UnexpectedEOF;
         var set_expression = try Expression.create(self.allocator, .Set, set_start);
-        errdefer set_expression.deinit();
+        var should_cleanup = true;
+        defer if (should_cleanup) set_expression.deinit();
 
         while (self.peek()) |current_token| {
             switch (current_token.token) {
                 .RightBrace => {
                     _ = self.advance();
+                    should_cleanup = false;
                     return set_expression;
                 },
                 .EOF => return ParseError.UnbalancedBraces,
