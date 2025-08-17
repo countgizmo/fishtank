@@ -124,6 +124,7 @@ pub const Expression = struct {
     },
 
     position: Position,
+    quoted: bool = false,
 
     // fn hashExpression(expr: Expression) u64 {
     //     var hasher = std.hash.Wyhash.init(0);
@@ -433,6 +434,12 @@ pub const Parser = struct {
                 _ = self.advance();
                 break :blk try Expression.create(self.allocator, .Int, current_token);
             },
+            .Quote => blk: {
+                _ = self.advance();
+                var expr = try self.parseExpression();
+                expr.quoted = true;
+                break :blk expr;
+            },
 
             else => ParseError.UnexpectedToken,
         };
@@ -722,4 +729,43 @@ test "parse a simple map" {
     try expectEqual(map.value.map.get(human_age).?.value.int, 124);
     try expectEqual(map.value.map.get(human_name).?.value.string, "Abobo");
     try expectEqual(map.value.map.get(human_size).?.value.keyword, ":extra_large");
+}
+
+test "parse quoted symbol" {
+    // 'foo
+    const tokens = [_]TokenWithPosition{
+        .{ .token = .Quote, .line = 1, .column = 1 },
+        .{ .token = .{ .Symbol = "foo" }, .line = 1, .column = 2 },
+        .{ .token = .EOF, .line = 1, .column = 5 },
+    };
+
+    var parser = Parser.init(testing.allocator, &tokens);
+    var result = try parser.parse("test.clj");
+    defer result.deinit();
+
+    const expr = result.expressions.items[0];
+    try testing.expectEqual(expr.kind, .Symbol);
+    try testing.expectEqualStrings(expr.value.symbol, "foo");
+    try testing.expectEqual(expr.quoted, true);
+}
+
+test "parse quoted list" {
+    // '(a 1)
+    const tokens = [_]TokenWithPosition{
+        .{ .token = .Quote, .line = 1, .column = 1 },
+        .{ .token = .LeftParen, .line = 1, .column = 2 },
+        .{ .token = .{ .Symbol = "a" }, .line = 1, .column = 3 },
+        .{ .token = .{ .Int = 1 }, .line = 1, .column = 5 },
+        .{ .token = .RightParen, .line = 1, .column = 6 },
+        .{ .token = .EOF, .line = 1, .column = 7 },
+    };
+
+    var parser = Parser.init(testing.allocator, &tokens);
+    var result = try parser.parse("test.clj");
+    defer result.deinit();
+
+    const expr = result.expressions.items[0];
+    try testing.expectEqual(expr.kind, .List);
+    try testing.expectEqual(expr.quoted, true);
+    try testing.expectEqual(expr.value.list.items.len, 2);
 }
