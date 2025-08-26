@@ -129,7 +129,9 @@ const ExpressionKind = enum {
     Keyword,
     Vector,
     Map,
-    Set
+    Set,
+
+    Unparsed,
 };
 
 pub const Expression = struct {
@@ -144,6 +146,10 @@ pub const Expression = struct {
         vector: ArrayList(Expression),
         map: HashMap(Expression, Expression, Expression.HashContext, 80),
         set: ArrayList(Expression),
+        unparsed: struct {
+            reason: []const u8,
+            tokens: []const TokenWithPosition,
+        },
     },
 
     position: Position,
@@ -275,6 +281,7 @@ pub const Expression = struct {
                     .column = token.column,
                 },
             },
+            .Unparsed => return ParseError.UnexpectedToken,
         };
     }
 
@@ -505,14 +512,30 @@ pub const Parser = struct {
                 break :blk expr;
             },
             .Hash => {
-                _ = self.advance();
+                const hash_token = self.advance();
                 const next = self.peek() orelse return ParseError.UnexpectedEOF;
                 return switch (next.token) {
                     .LeftBrace => self.parseSet(),
-                    // TODO(evgheni):
-                    // .Underscore => self.parseDiscard(),
-                    // .Symbol => self.parseTagged(),
-                    else => ParseError.UnexpectedToken,
+                    else => {
+                        if (hash_token) |the_hash_token| {
+                            const skipped = self.advance();
+                            return Expression {
+                                .kind = .Unparsed,
+                                .value = .{
+                                    .unparsed = .{
+                                        .reason = "Unsupported # form",
+                                        .tokens = &[_]TokenWithPosition{ the_hash_token, skipped.? },
+                                    }
+                                },
+                                .position = .{
+                                    .line = the_hash_token.line,
+                                    .column = the_hash_token.column,
+                                },
+                            };
+                        } else {
+                            return ParseError.UnexpectedToken;
+                        }
+                    }
                 };
             },
 
@@ -1007,4 +1030,38 @@ test "parse ns with :refer [symbols]" {
             try testing.expectEqualStrings("trim", syms.items[2]);
         },
     }
+}
+
+test "parse unsupported hash forms as unparsed" {
+    const tokens = [_]TokenWithPosition{
+        // (def x #_foo 42)  - testing discard form
+        .{ .token = .LeftParen, .line = 1, .column = 1 },
+        .{ .token = .{ .Symbol = "def" }, .line = 1, .column = 2 },
+        .{ .token = .{ .Symbol = "x" }, .line = 1, .column = 6 },
+        .{ .token = .Hash, .line = 1, .column = 8 },
+        .{ .token = .{ .Symbol = "_foo" }, .line = 1, .column = 9 },  // This would be parsed as discard
+        .{ .token = .{ .Int = 42 }, .line = 1, .column = 14 },
+        .{ .token = .RightParen, .line = 1, .column = 17 },
+        .{ .token = .EOF, .line = 1, .column = 18 },
+    };
+
+    var parser = Parser.init(testing.allocator, &tokens);
+    var module = try parser.parse("test.clj");
+    defer module.deinit();
+
+    // Should have parsed the def expression
+    try testing.expectEqual(1, module.expressions.items.len);
+
+    const def_expr = module.expressions.items[0];
+    try testing.expectEqual(ExpressionKind.List, def_expr.kind);
+    try testing.expectEqual(4, def_expr.value.list.items.len);
+
+    // The third item should be our unparsed expression
+    const unparsed = def_expr.value.list.items[2];
+    try testing.expectEqual(ExpressionKind.Unparsed, unparsed.kind);
+    try testing.expectEqualStrings("Unsupported # form", unparsed.value.unparsed.reason);
+
+    // The fourth item should be the 42
+    const num = def_expr.value.list.items[3];
+    try testing.expectEqual(42, num.value.int);
 }
