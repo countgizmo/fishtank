@@ -147,6 +147,10 @@ pub const Lexer = struct {
             const c = self.advance();
 
             if (isDelimiter(c)) {
+                if (c == '\n') {
+                    self.line += 1;
+                    self.column = 0;
+                }
                 continue;
             }
 
@@ -205,13 +209,14 @@ pub const Lexer = struct {
 
 
     fn lexSymbolOrBuiltIn(self: *Lexer) TokenWithPosition {
-        const start = self.cursor - 1;
+        const start_cursor = self.cursor - 1;
+        const start_column = self.column;
 
         while (self.cursor < self.source.len and isValidSymbolCharacter(self.source[self.cursor])) {
             _ = self.advance();
         }
 
-        const text = self.source[start..self.cursor];
+        const text = self.source[start_cursor..self.cursor];
 
         var tokenType: Token = undefined;
         if (std.mem.eql(u8, text, "nil")) {
@@ -229,12 +234,13 @@ pub const Lexer = struct {
         return TokenWithPosition{
             .token = tokenType,
             .line = self.line,
-            .column = start + 1,
+            .column = start_column,
         };
     }
 
     fn lexKeyword(self: *Lexer) TokenWithPosition {
         const start = self.cursor - 1;
+        const start_column = self.column;
 
         while (self.cursor < self.source.len and isValidSymbolCharacter(self.source[self.cursor])) {
             _ = self.advance();
@@ -245,13 +251,14 @@ pub const Lexer = struct {
         return TokenWithPosition{
             .token = Token{ .Keyword = text },
             .line = self.line,
-            .column = start + 1,
+            .column = start_column,
         };
     }
 
     // TODO(evheni): parse floats.
     fn lexNumber(self: *Lexer) !TokenWithPosition {
         const start = self.cursor - 1;
+        const start_column = self.column;
 
         while (self.cursor < self.source.len and std.ascii.isDigit(self.source[self.cursor])) {
             _ = self.advance();
@@ -270,7 +277,7 @@ pub const Lexer = struct {
         return TokenWithPosition {
             .token = Token{ .Int = int },
             .line = self.line,
-            .column = start + 1,
+            .column = start_column,
         };
     }
 
@@ -298,6 +305,7 @@ pub const Lexer = struct {
     fn lexString(self: *Lexer) !TokenWithPosition {
         // No -1 cause we exclude openning quote from the value
         const start = self.cursor;
+        const start_column = self.column;
 
         while (self.cursor < self.source.len-1 and
                (isValidStringCharacter(self.peek()) or self.isEscapeSequence(self.peek()))) {
@@ -318,7 +326,7 @@ pub const Lexer = struct {
         return TokenWithPosition{
             .token = Token{ .String = text },
             .line = self.line,
-            .column = start,
+            .column = start_column,
         };
     }
 };
@@ -793,3 +801,29 @@ test "lexer - def with string" {
     }
 }
 
+test "lexer - line and column counting with different newlines" {
+    const source = "foo\nbar\r\nbaz\rqux";
+
+    var lexer = Lexer.init(testing.allocator, source);
+    var tokens = try lexer.getTokens();
+    defer tokens.deinit();
+
+    const expected_tokens = [_]TokenWithPosition{
+        .{ .token = .{ .Symbol = "foo" }, .line = 1, .column = 1 },
+        .{ .token = .{ .Symbol = "bar" }, .line = 2, .column = 1 },
+        .{ .token = .{ .Symbol = "baz" }, .line = 3, .column = 1 },
+        .{ .token = .{ .Symbol = "qux" }, .line = 3, .column = 5 }, // \r doesn't increment line
+        .{ .token = .EOF, .line = 3, .column = 8 },
+    };
+
+    for (tokens.items, 0..) |actual_token, idx| {
+        switch (actual_token.token) {
+            .Symbol => |value| {
+                try expectEqualStrings(expected_tokens[idx].token.Symbol, value);
+                try expectEqual(expected_tokens[idx].line, actual_token.line);
+                try expectEqual(expected_tokens[idx].column, actual_token.column);
+            },
+            else => try expectEqual(expected_tokens[idx], actual_token),
+        }
+    }
+}
