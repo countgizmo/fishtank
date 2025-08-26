@@ -19,10 +19,26 @@ const UiState = @import("ui/state.zig").UiState;
 // and put all the parsed Expressions into the module
 // Main program calls visualization module
 
+pub const ReferOption = union(enum) {
+    all,
+    symbols: ArrayList([]const u8)
+};
+
 pub const RequiredLib = struct {
     name: []const u8,
     as: ?[]const u8,
-    //TODO(evgheni): add refer, as-alias, etc.
+    refer: ?ReferOption,
+    //TODO(evgheni): as-alias, etc.
+    //
+
+    pub fn deinit(self: *RequiredLib) void {
+        if (self.refer) |ref| {
+            switch (ref) {
+                .symbols => |list| list.deinit(),
+                .all => {},
+            }
+        }
+    }
 };
 
 pub const Position = struct {
@@ -61,6 +77,12 @@ pub const Module = struct {
         for (self.expressions.items) |*expression| {
             expression.deinit();
         }
+
+
+        for (self.required_modules.items) |*req_module| {
+            req_module.deinit();
+        }
+
         self.expressions.deinit();
         self.required_modules.deinit();
         self.functions.deinit();
@@ -338,13 +360,14 @@ pub const Parser = struct {
     //             [other.lib :as other]
     //             simple.require))
 
-    fn parseRequiredLib(expression: Expression) ?RequiredLib{
+    fn parseRequiredLib(self: Parser, expression: Expression) ?RequiredLib{
         if (expression.kind == .Vector) {
             switch (expression.value.vector.items.len) {
                 1 => {
                     return RequiredLib {
                         .name = expression.value.vector.items[0].value.symbol,
                         .as = null,
+                        .refer = null,
                     };
                 },
                 3 => {
@@ -353,16 +376,38 @@ pub const Parser = struct {
                         return RequiredLib {
                             .name = expression.value.vector.items[0].value.symbol,
                             .as = expression.value.vector.items[2].value.symbol,
+                            .refer = null,
                         };
-                    }
 
+                    }
                     if (std.mem.eql(u8, option, ":refer")) {
-                        std.debug.panic(":refer parsing NOT IMPLEMENTED", .{});
-                        // TODO(evgheni): NOT IMPELENTED
-                        // return RequiredLib {
-                        //     .name = expression.value.vector.items[0].value.symbol,
-                        //     .as = option,
-                        // };
+                        const refer_expr = expression.value.vector.items[2];
+
+                        var req_lib = RequiredLib {
+                            .name = expression.value.vector.items[0].value.symbol,
+                            .as = null,
+                            .refer = null,
+                        };
+
+                        switch (refer_expr.kind) {
+                            .Keyword => {
+                                if (std.mem.eql(u8, refer_expr.value.keyword, ":all")) {
+                                    req_lib.refer = .{ .all = {} };
+                                }
+                            },
+                            .Vector => {
+                                var refer_list = ArrayList([]const u8).init(self.allocator);
+                                for (refer_expr.value.vector.items) |refer_item| {
+                                    refer_list.append(refer_item.value.symbol) catch {
+                                        refer_list.deinit();
+                                        return null;
+                                    };
+                                }
+                                req_lib.refer = .{ .symbols = refer_list };
+                            },
+                            else => {},
+                        }
+                        return req_lib;
                     }
                 },
                 else => {
@@ -375,19 +420,20 @@ pub const Parser = struct {
             return RequiredLib {
                 .name = expression.value.symbol,
                 .as = null,
+                .refer = null,
             };
         }
 
         return null;
     }
 
-    fn parseNs(module: *Module, expression: Expression) !void {
+    fn parseNs(self: Parser, module: *Module, expression: Expression) !void {
         module.name = expression.value.list.items[1].value.symbol;
 
         if (expression.value.list.items.len > 2) {
             const require = expression.value.list.items[2].value.list;
             for (require.items) |item| {
-                if (parseRequiredLib(item)) |lib| {
+                if (self.parseRequiredLib(item)) |lib| {
                     try module.addRequiredLib(lib);
                 }
             }
@@ -417,7 +463,7 @@ pub const Parser = struct {
                 else => {
                     const expression = try self.parseExpression();
                     if (std.mem.eql(u8, module.name, "") and isNs(expression)) {
-                        try parseNs(&module, expression);
+                        try self.parseNs(&module, expression);
                     } else if (isDefn(expression)) {
                         try parseDefn(&module, expression);
                     }
@@ -508,7 +554,7 @@ pub const Parser = struct {
             switch (current_token.token) {
                 .RightBracket => {
                     _ = self.advance();
-                    should_cleanup = true;
+                    should_cleanup = false;
                     return vector_expression;
                 },
                 .EOF => return ParseError.UnbalancedParentheses,
@@ -540,7 +586,7 @@ pub const Parser = struct {
                     }
 
                     _ = self.advance();
-                    should_cleanup = true;
+                    should_cleanup = false;
                     return map_expression;
                 },
                 .EOF => return ParseError.UnclosedMap,
@@ -871,4 +917,94 @@ test "parse a simple set" {
     try testing.expectEqual(key_a, set_expr.value.set.items[0]);
     try testing.expectEqual(key_b, set_expr.value.set.items[1]);
     try testing.expectEqual(key_c, set_expr.value.set.items[2]);
+}
+
+test "parse ns with :refer :all" {
+    const tokens = [_]TokenWithPosition{
+        // (ns my-namespace
+        //   (:require [clojure.string :refer :all]))
+
+        .{ .token = .LeftParen, .line = 1, .column = 1 },
+        .{ .token = .{ .Symbol = "ns" }, .line = 1, .column = 2 },
+        .{ .token = .{ .Symbol = "my-namespace" }, .line = 1, .column = 5 },
+        .{ .token = .LeftParen, .line = 2, .column = 3 },
+        .{ .token = .{ .Keyword = ":require" }, .line = 2, .column = 4 },
+
+        .{ .token = .LeftBracket, .line = 2, .column = 13 },
+        .{ .token = .{ .Symbol = "clojure.string" }, .line = 2, .column = 14 },
+        .{ .token = .{ .Keyword = ":refer" }, .line = 2, .column = 29 },
+        .{ .token = .{ .Keyword = ":all" }, .line = 2, .column = 36 },
+        .{ .token = .RightBracket, .line = 2, .column = 40 },
+
+        .{ .token = .RightParen, .line = 2, .column = 41 },
+        .{ .token = .RightParen, .line = 2, .column = 42 },
+        .{ .token = .EOF, .line = 3, .column = 1 },
+    };
+
+    var parser = Parser.init(testing.allocator, &tokens);
+    var module = try parser.parse("test_file.clj");
+    defer module.deinit();
+
+    try testing.expectEqualStrings("my-namespace", module.name);
+    try testing.expectEqual(1, module.required_modules.items.len);
+
+    const req = module.required_modules.items[0];
+    try testing.expectEqualStrings("clojure.string", req.name);
+    try testing.expectEqual(null, req.as);
+    try testing.expect(req.refer != null);
+
+    switch (req.refer.?) {
+        .all => {}, // expected
+        .symbols => |_| try testing.expect(false), // should not be symbols
+    }
+}
+
+test "parse ns with :refer [symbols]" {
+    const tokens = [_]TokenWithPosition{
+        // (ns my-namespace
+        //   (:require [clojure.string :refer [join split trim]]))
+
+        .{ .token = .LeftParen, .line = 1, .column = 1 },
+        .{ .token = .{ .Symbol = "ns" }, .line = 1, .column = 2 },
+        .{ .token = .{ .Symbol = "my-namespace" }, .line = 1, .column = 5 },
+        .{ .token = .LeftParen, .line = 2, .column = 3 },
+        .{ .token = .{ .Keyword = ":require" }, .line = 2, .column = 4 },
+
+        .{ .token = .LeftBracket, .line = 2, .column = 13 },
+        .{ .token = .{ .Symbol = "clojure.string" }, .line = 2, .column = 14 },
+        .{ .token = .{ .Keyword = ":refer" }, .line = 2, .column = 29 },
+
+        .{ .token = .LeftBracket, .line = 2, .column = 36 },
+        .{ .token = .{ .Symbol = "join" }, .line = 2, .column = 37 },
+        .{ .token = .{ .Symbol = "split" }, .line = 2, .column = 42 },
+        .{ .token = .{ .Symbol = "trim" }, .line = 2, .column = 48 },
+        .{ .token = .RightBracket, .line = 2, .column = 52 },
+
+        .{ .token = .RightBracket, .line = 2, .column = 53 },
+        .{ .token = .RightParen, .line = 2, .column = 54 },
+        .{ .token = .RightParen, .line = 2, .column = 55 },
+        .{ .token = .EOF, .line = 3, .column = 1 },
+    };
+
+    var parser = Parser.init(testing.allocator, &tokens);
+    var module = try parser.parse("test_file.clj");
+    defer module.deinit();
+
+    try testing.expectEqualStrings("my-namespace", module.name);
+    try testing.expectEqual(@as(usize, 1), module.required_modules.items.len);
+
+    const req = module.required_modules.items[0];
+    try testing.expectEqualStrings("clojure.string", req.name);
+    try testing.expectEqual(null, req.as);
+    try testing.expect(req.refer != null);
+
+    switch (req.refer.?) {
+        .all => try testing.expect(false), // should not be :all
+        .symbols => |syms| {
+            try testing.expectEqual(@as(usize, 3), syms.items.len);
+            try testing.expectEqualStrings("join", syms.items[0]);
+            try testing.expectEqualStrings("split", syms.items[1]);
+            try testing.expectEqualStrings("trim", syms.items[2]);
+        },
+    }
 }
