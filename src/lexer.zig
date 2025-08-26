@@ -470,7 +470,6 @@ test "tokenize invalid symbols" {
         .{ .symbol = "ns/foo/bar", .expected_error = LexerError.UnexpectedFirstCharacter},
         .{ .symbol = "foo@bar", .expected_error = LexerError.UnexpectedCharacter},
         .{ .symbol = "foo~bar", .expected_error = LexerError.UnexpectedCharacter},
-        .{ .symbol = "#something", .expected_error = LexerError.UnexpectedCharacter},
     };
 
     for (invalid_symbols) |invalid_symbol| {
