@@ -10,15 +10,6 @@ const TokenWithPosition = token_module.TokenWithPosition;
 const Components = @import("ui/components.zig");
 const UiState = @import("ui/state.zig").UiState;
 
-// Main idea:
-// Read a Clojure file
-// Give it to the main program
-// Main program gets the contents and the meta data
-// Main program runs lexer to get all the tokens
-// Main program runs the parser giving it the meta data so that it can create Module
-// and put all the parsed Expressions into the module
-// Main program calls visualization module
-
 pub const ReferOption = union(enum) {
     all,
     symbols: ArrayList([]const u8)
@@ -29,7 +20,6 @@ pub const RequiredLib = struct {
     as: ?[]const u8,
     refer: ?ReferOption,
     //TODO(evgheni): as-alias, etc.
-    //
 
     pub fn deinit(self: *RequiredLib) void {
         if (self.refer) |ref| {
