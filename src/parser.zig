@@ -148,7 +148,8 @@ pub const Expression = struct {
         set: ArrayList(Expression),
         unparsed: struct {
             reason: []const u8,
-            tokens: []const TokenWithPosition,
+            start_token: TokenWithPosition,
+            skipped_token: ?TokenWithPosition,
         },
     },
 
@@ -524,7 +525,8 @@ pub const Parser = struct {
                                 .value = .{
                                     .unparsed = .{
                                         .reason = "Unsupported # form",
-                                        .tokens = &[_]TokenWithPosition{ the_hash_token, skipped.? },
+                                        .start_token = the_hash_token,
+                                        .skipped_token = skipped
                                     }
                                 },
                                 .position = .{
@@ -1058,8 +1060,16 @@ test "parse unsupported hash forms as unparsed" {
 
     // The third item should be our unparsed expression
     const unparsed = def_expr.value.list.items[2];
+
+    // Testing reason
     try testing.expectEqual(ExpressionKind.Unparsed, unparsed.kind);
     try testing.expectEqualStrings("Unsupported # form", unparsed.value.unparsed.reason);
+
+    // Testing the start token (the one that we were parsing when we got the unparsed token)
+    try testing.expectEqual(.Hash, unparsed.value.unparsed.start_token.token);
+
+    // Testing the actual skipped token
+    try testing.expectEqualStrings("_foo", unparsed.value.unparsed.skipped_token.?.token.Symbol);
 
     // The fourth item should be the 42
     const num = def_expr.value.list.items[3];
