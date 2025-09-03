@@ -41,6 +41,7 @@ pub const Project = struct {
         defer dir.close();
 
         var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
+        errdefer self.deinit();
 
         var iterator = dir.iterate();
         while (try iterator.next()) |entry| {
