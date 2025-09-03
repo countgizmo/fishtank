@@ -534,7 +534,26 @@ pub const Parser = struct {
                 };
             },
 
-            else => ParseError.UnexpectedToken,
+            else => {
+                const start_token = current_token;
+                _ = self.advance();
+                const skipped_token = self.peek();
+
+                return Expression {
+                    .kind = .Unparsed,
+                    .value = .{
+                        .unparsed = .{
+                            .reason = "Unsupported # form",
+                            .start_token = start_token,
+                            .skipped_token = skipped_token
+                        }
+                    },
+                    .position = .{
+                        .line = start_token.line,
+                        .column = start_token.column,
+                    },
+                };
+            },
         };
     }
 
