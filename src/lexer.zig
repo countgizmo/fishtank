@@ -162,7 +162,7 @@ pub const Lexer = struct {
                 '{' => return self.makeToken(.LeftBrace),
                 '}' => return self.makeToken(.RightBrace),
                 '\'' => return self.makeToken(.Quote),
-                '#' => return self.makeToken(.Hash),
+                '#' => return self.makeToken(.Pound),
                 else => {
                     if (self.isSymbolBegins(c)) {
                         const maybe_symbol = self.lexSymbolOrBuiltIn();

@@ -460,6 +460,7 @@ pub const Parser = struct {
                 .EOF => break,
                 else => {
                     const expression = try self.parseExpression();
+
                     if (std.mem.eql(u8, module.name, "") and isNs(expression)) {
                         try self.parseNs(&module, expression);
                     } else if (isDefn(expression)) {
@@ -476,6 +477,7 @@ pub const Parser = struct {
     fn parseExpression(self: *Parser) ParseError!Expression {
         const current_token = self.peek() orelse return ParseError.UnexpectedToken;
 
+        std.log.debug("Token = {any}\n", .{current_token});
         return switch (current_token.token) {
             .LeftParen => self.parseList(),
             .LeftBracket => self.parseVector(),
@@ -502,26 +504,27 @@ pub const Parser = struct {
                 expr.quoted = true;
                 break :blk expr;
             },
-            .Hash => {
-                const hash_token = self.advance();
+            .Pound => {
+                const pound_token = self.advance();
                 const next = self.peek() orelse return ParseError.UnexpectedEOF;
                 return switch (next.token) {
                     .LeftBrace => self.parseSet(),
+                    .LeftParen => self.parseList(),
                     else => {
-                        if (hash_token) |the_hash_token| {
+                        if (pound_token) |the_pound_token| {
                             const skipped = self.advance();
                             return Expression {
                                 .kind = .Unparsed,
                                 .value = .{
                                     .unparsed = .{
                                         .reason = "Unsupported # form",
-                                        .start_token = the_hash_token,
+                                        .start_token = the_pound_token,
                                         .skipped_token = skipped
                                     }
                                 },
                                 .position = .{
-                                    .line = the_hash_token.line,
-                                    .column = the_hash_token.column,
+                                    .line = the_pound_token.line,
+                                    .column = the_pound_token.column,
                                 },
                             };
                         } else {
@@ -538,14 +541,12 @@ pub const Parser = struct {
     fn parseList(self: *Parser) ParseError!Expression {
         const left_paren = self.advance() orelse return ParseError.UnexpectedEOF;
         var list_expression = try Expression.create(self.allocator, .List, left_paren);
-        var should_cleanup = true;
-        defer if (should_cleanup) list_expression.deinit();
+        errdefer list_expression.deinit();
 
         while (self.peek()) |current_token| {
             switch (current_token.token) {
                 .RightParen => {
                     _ = self.advance();
-                    should_cleanup = false;
                     return list_expression;
                 },
                 .EOF => return ParseError.UnbalancedParentheses,
@@ -562,14 +563,12 @@ pub const Parser = struct {
     fn parseVector(self: *Parser) ParseError!Expression {
         const left_bracket = self.advance() orelse return ParseError.UnexpectedEOF;
         var vector_expression = try Expression.create(self.allocator, .Vector, left_bracket);
-        var should_cleanup = true;
-        defer if (should_cleanup) vector_expression.deinit();
+        errdefer vector_expression.deinit();
 
         while (self.peek()) |current_token| {
             switch (current_token.token) {
                 .RightBracket => {
                     _ = self.advance();
-                    should_cleanup = false;
                     return vector_expression;
                 },
                 .EOF => return ParseError.UnbalancedParentheses,
@@ -586,8 +585,8 @@ pub const Parser = struct {
     fn parseMap(self: *Parser) ParseError!Expression {
         const left_brace = self.advance() orelse return ParseError.UnexpectedEOF;
         var map_expression = try Expression.create(self.allocator, .Map, left_brace);
-        var should_cleanup = true;
-        defer if (should_cleanup) map_expression.deinit();
+        errdefer map_expression.deinit();
+
 
         var is_key = true;
         var key: ?Expression = null;
@@ -601,7 +600,6 @@ pub const Parser = struct {
                     }
 
                     _ = self.advance();
-                    should_cleanup = false;
                     return map_expression;
                 },
                 .EOF => return ParseError.UnclosedMap,
@@ -629,14 +627,12 @@ pub const Parser = struct {
     fn parseSet(self: *Parser) ParseError!Expression {
         const set_start = self.advance() orelse return ParseError.UnexpectedEOF;
         var set_expression = try Expression.create(self.allocator, .Set, set_start);
-        var should_cleanup = true;
-        defer if (should_cleanup) set_expression.deinit();
+        errdefer set_expression.deinit();
 
         while (self.peek()) |current_token| {
             switch (current_token.token) {
                 .RightBrace => {
                     _ = self.advance();
-                    should_cleanup = false;
                     return set_expression;
                 },
                 .EOF => return ParseError.UnbalancedBraces,
@@ -893,7 +889,7 @@ test "parse quoted list" {
 test "parse a simple set" {
     const tokens = [_]TokenWithPosition{
         // #{:a :b :c}
-        .{ .token = .Hash, .line = 1, .column = 1 },
+        .{ .token = .Pound, .line = 1, .column = 1 },
         .{ .token = .LeftBrace, .line = 1, .column = 2 },
         .{ .token = .{ .Keyword = ":a" }, .line = 1, .column = 3 },
         .{ .token = .{ .Keyword = ":b" }, .line = 1, .column = 6 },
@@ -1024,13 +1020,13 @@ test "parse ns with :refer [symbols]" {
     }
 }
 
-test "parse unsupported hash forms as unparsed" {
+test "parse unsupported pound forms as unparsed" {
     const tokens = [_]TokenWithPosition{
         // (def x #_foo 42)  - testing discard form
         .{ .token = .LeftParen, .line = 1, .column = 1 },
         .{ .token = .{ .Symbol = "def" }, .line = 1, .column = 2 },
         .{ .token = .{ .Symbol = "x" }, .line = 1, .column = 6 },
-        .{ .token = .Hash, .line = 1, .column = 8 },
+        .{ .token = .Pound, .line = 1, .column = 8 },
         .{ .token = .{ .Symbol = "_foo" }, .line = 1, .column = 9 },  // This would be parsed as discard
         .{ .token = .{ .Int = 42 }, .line = 1, .column = 14 },
         .{ .token = .RightParen, .line = 1, .column = 17 },
@@ -1056,7 +1052,7 @@ test "parse unsupported hash forms as unparsed" {
     try testing.expectEqualStrings("Unsupported # form", unparsed.value.unparsed.reason);
 
     // Testing the start token (the one that we were parsing when we got the unparsed token)
-    try testing.expectEqual(.Hash, unparsed.value.unparsed.start_token.token);
+    try testing.expectEqual(.Pound, unparsed.value.unparsed.start_token.token);
 
     // Testing the actual skipped token
     try testing.expectEqualStrings("_foo", unparsed.value.unparsed.skipped_token.?.token.Symbol);

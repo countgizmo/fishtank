@@ -21,12 +21,11 @@ pub const Project = struct {
     }
 
     pub fn deinit(self: *Project) void {
+        self.arena.deinit();
         for (self.modules.items) |*module| {
             module.deinit();
         }
         self.modules.deinit();
-
-        self.arena.deinit();
     }
 
     fn getcontent(self: *Project, file_path: []const u8) ![]u8 {
@@ -49,6 +48,7 @@ pub const Project = struct {
                 const file_path = try std.fmt.bufPrint(&path_buffer, "{s}/{s}", .{ folder_path, entry.name });
                 const contents = try self.getcontent(file_path);
 
+                std.log.debug("Lexing file: {s}", .{entry.name});
                 var lexer = Lexer.init(self.allocator, contents);
                 const tokens = try lexer.getTokens();
                 defer tokens.deinit();
