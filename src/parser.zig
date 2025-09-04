@@ -477,7 +477,7 @@ pub const Parser = struct {
     fn parseExpression(self: *Parser) ParseError!Expression {
         const current_token = self.peek() orelse return ParseError.UnexpectedToken;
 
-        std.log.debug("Token = {any}\n", .{current_token});
+        // std.log.debug("Token = {any}\n", .{current_token});
         return switch (current_token.token) {
             .LeftParen => self.parseList(),
             .LeftBracket => self.parseVector(),

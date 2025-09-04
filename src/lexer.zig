@@ -52,7 +52,7 @@ pub const Lexer = struct {
             error.UnexpectedCharacter => {
                 tokens.deinit();
                 if (!self.quiet) {
-                    std.log.err("Unexpected token '{c}' at column {d} line {d}", .{self.source[self.cursor-1], self.column, self.line});
+                    std.log.err("Unexpected character '{c}' at column {d} line {d}", .{self.source[self.cursor-1], self.column, self.line});
                 }
                 return err;
             },
@@ -163,6 +163,7 @@ pub const Lexer = struct {
                 '}' => return self.makeToken(.RightBrace),
                 '\'' => return self.makeToken(.Quote),
                 '#' => return self.makeToken(.Pound),
+                '@' => return self.makeToken(.At),
                 else => {
                     if (self.isSymbolBegins(c)) {
                         const maybe_symbol = self.lexSymbolOrBuiltIn();
