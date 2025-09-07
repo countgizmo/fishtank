@@ -31,8 +31,8 @@ fn getFontPath(allocator: Allocator) ![:0]u8 {
     return allocator.dupeZ(u8, path);
 }
 
-pub const width = 800;
-pub const height = 600;
+pub const width = 1024;
+pub const height = 768;
 
 pub fn main() !void {
     rl.SetConfigFlags(rl.FLAG_WINDOW_HIGHDPI);
@@ -55,15 +55,14 @@ pub fn main() !void {
             .font = rl.LoadFont(font_path.ptr)
         },
         .active_text_style = .{
-            .font_size = Primitives.big_font_size,
+            .font_size = Primitives.normal_font_size,
         },
     };
 
     defer rl.UnloadFont(ui.text_config.font.?);
 
     if (ui.text_config.font) |*font| {
-        rl.GenTextureMipmaps(&font.texture);
-        rl.SetTextureFilter(font.texture, rl.TEXTURE_FILTER_TRILINEAR);
+        rl.SetTextureFilter(font.texture, rl.TEXTURE_FILTER_BILINEAR);
     }
 
     var project = try Project.init(gpa.allocator());
