@@ -40,10 +40,10 @@ pub const Rect = struct {
 };
 
 pub const WidgetFlags = packed struct {
-    clickable: bool = false,
     has_border: bool = false,
     has_background: bool = false,
     has_text: bool = false,
+    show_hover_effect: bool = false,
 };
 
 pub const Widget = struct{
@@ -74,7 +74,18 @@ pub fn render_widget(ui: UiState, widget: Widget) void {
             .width = widget.rect.width,
             .height = widget.rect.height,
         };
-        rl.DrawRectangleLinesEx(border_rect, border_width, text_color);
+
+        var border_color = text_color;
+
+        if (widget.flags.show_hover_effect) {
+            const mouse_pos = rl.GetMousePosition();
+            const is_hovered = rl.CheckCollisionPointRec(mouse_pos, body_rect);
+
+            if (is_hovered) {
+                border_color = rl.ColorBrightness(text_color, 0.5);
+            }
+        }
+        rl.DrawRectangleLinesEx(border_rect, border_width, border_color);
     }
 
     if (widget.flags.has_text and widget.text != null) {
