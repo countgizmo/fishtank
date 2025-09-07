@@ -79,6 +79,22 @@ pub fn graphnode(ui: *UiState, x: i32, y: i32, text: []const u8) void {
     Primitives.render_widget(ui.*, widget);
 }
 
+const modal_width = 200;
+const modal_height = 400;
+
+pub fn modal(ui: *UiState, x: f32, y: f32) void {
+    const widget = Widget{
+        .rect = Rect{
+            .x = x,
+            .y = y,
+            .width = modal_width,
+            .height = modal_height },
+        .flags = .{ .has_border = true },
+    };
+
+    Primitives.render_widget(ui.*, widget);
+}
+
 pub fn treemapitem(ui: *UiState, rect: Primitives.Rect, text: []const u8) bool {
     const widget = Primitives.Widget{
         .rect = rect,

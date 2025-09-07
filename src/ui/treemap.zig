@@ -2,11 +2,19 @@ const std = @import("std");
 const UiState = @import("state.zig").UiState;
 const primitives = @import("primitives.zig");
 const Components = @import("components.zig");
+const Module = @import("../parser.zig").Module;
+const rl = @cImport({
+    @cInclude("raylib.h");
+});
 
+pub const TreemapItemContext = struct {
+    module: *Module,
+};
 
 pub const TreemapItem = struct {
     name: []const u8,
     weight: f32,
+    context: TreemapItemContext,
 };
 
 pub const SplitStrategy = enum {
@@ -35,7 +43,9 @@ pub fn render(ui: *UiState, window_width: i32, window_height: i32, items: []Tree
     var container_width = @as(f32, @floatFromInt(window_width));
     var container_height = @as(f32, @floatFromInt(window_height));
 
-    for (items) |item| {
+    var item_clicked: ?usize = null;
+
+    for (items, 0..) |item, idx| {
         switch (split) {
             .horizontal => {
                 const current_width = container_width / total_weight * item.weight;
@@ -48,8 +58,9 @@ pub fn render(ui: *UiState, window_width: i32, window_height: i32, items: []Tree
                 };
 
                 if (Components.treemapitem(ui, current_rect, item.name)) {
-                    std.log.debug("Clicked {s}", .{ item.name });
+                    item_clicked = idx;
                 }
+
 
                 // Getting ready for the next item.
                 split = .vertical;
@@ -68,7 +79,7 @@ pub fn render(ui: *UiState, window_width: i32, window_height: i32, items: []Tree
                 };
 
                 if (Components.treemapitem(ui, current_rect, item.name)) {
-                    std.log.debug("Clicked {s}", .{ item.name });
+                    item_clicked = idx;
                 }
 
                 // Getting ready for the next item.
@@ -80,4 +91,10 @@ pub fn render(ui: *UiState, window_width: i32, window_height: i32, items: []Tree
         }
     }
 
+    if (item_clicked) |clicked_idx| {
+        const item = items[clicked_idx];
+        std.log.debug("Clicked {s}", .{ item.name });
+        const mouse = rl.GetMousePosition();
+        Components.modal(ui, mouse.x, mouse.y);
+    }
 }
