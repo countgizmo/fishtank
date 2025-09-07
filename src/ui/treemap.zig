@@ -47,7 +47,9 @@ pub fn render(ui: *UiState, window_width: i32, window_height: i32, items: []Tree
                     .y = current_y,
                 };
 
-                Components.treemapitem(ui, current_rect, item.name);
+                if (Components.treemapitem(ui, current_rect, item.name)) {
+                    std.log.debug("Clicked {s}", .{ item.name });
+                }
 
                 // Getting ready for the next item.
                 split = .vertical;
@@ -65,7 +67,9 @@ pub fn render(ui: *UiState, window_width: i32, window_height: i32, items: []Tree
                     .y = current_y,
                 };
 
-                Components.treemapitem(ui, current_rect, item.name);
+                if (Components.treemapitem(ui, current_rect, item.name)) {
+                    std.log.debug("Clicked {s}", .{ item.name });
+                }
 
                 // Getting ready for the next item.
                 split = .horizontal;

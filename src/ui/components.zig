@@ -118,7 +118,8 @@ pub fn graphnode(ui: *UiState, x: i32, y: i32, text: []const u8) void {
     Primitives.render_widget(ui.*, widget);
 }
 
-pub fn treemapitem(ui: *UiState, rect: Primitives.Rect, text: []const u8) void {
+pub fn treemapitem(ui: *UiState, rect: Primitives.Rect, text: []const u8) bool {
+
     const widget = Primitives.Widget{
         .rect = rect,
         .flags = .{
@@ -129,4 +130,15 @@ pub fn treemapitem(ui: *UiState, rect: Primitives.Rect, text: []const u8) void {
     };
 
     Primitives.render_widget(ui.*, widget);
+
+    if (rl.IsMouseButtonReleased(rl.MOUSE_BUTTON_LEFT)) {
+        const mouse = rl.GetMousePosition();
+        if ((mouse.x >= rect.x and mouse.x <= rect.x + rect.width)
+            and
+            (mouse.y >= rect.y and mouse.y <= rect.y + rect.height)) {
+            return true;
+        }
+    }
+
+    return false;
 }
