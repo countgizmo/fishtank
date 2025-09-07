@@ -72,10 +72,13 @@ pub fn main() !void {
     var treeMapItems = ArrayList(TreemapItem).init(gpa.allocator());
     defer treeMapItems.deinit();
 
-    for (project.modules.items) |project_module| {
+    for (project.modules.items) |*project_module| {
         const mapitem = TreemapItem {
             .name = project_module.name,
             .weight = @as(f32, @floatFromInt(project_module.functions.items.len)),
+            .context = .{
+                .module = project_module,
+            },
         };
         try treeMapItems.append(mapitem);
     }

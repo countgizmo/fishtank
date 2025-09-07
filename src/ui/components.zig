@@ -79,8 +79,8 @@ pub fn graphnode(ui: *UiState, x: i32, y: i32, text: []const u8) void {
     Primitives.render_widget(ui.*, widget);
 }
 
-const modal_width = 200;
-const modal_height = 400;
+const modal_width = 300;
+const modal_height = 500;
 
 pub fn modal(ui: *UiState, x: f32, y: f32) void {
     const widget = Widget{

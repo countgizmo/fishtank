@@ -96,5 +96,20 @@ pub fn render(ui: *UiState, window_width: i32, window_height: i32, items: []Tree
         std.log.debug("Clicked {s}", .{ item.name });
         const mouse = rl.GetMousePosition();
         Components.modal(ui, mouse.x, mouse.y);
+
+        const start_x = @as(i32, @intFromFloat(mouse.x));
+        const start_y = @as(i32, @intFromFloat(mouse.y));
+
+        const header_x = start_x + 5;
+        const header_y = start_y + 10;
+
+        Components.header(ui, header_x, header_y, "Functions:");
+
+        for (item.context.module.functions.items, 0..) |function, idx| {
+            const fn_item_count = 1 + @as(i32, @intCast(idx));
+            const label_x = header_x + 5;
+            const label_y = header_y + (24 * fn_item_count);
+            Components.label(ui, label_x, label_y, function.name);
+        }
     }
 }
