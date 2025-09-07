@@ -3,4 +3,5 @@
 Parsing Clojure using Zig for fun.
 Trying different way to visualize code.
 
-<img width="811" height="646" alt="image" src="https://github.com/user-attachments/assets/11062beb-284e-4778-91ae-e7854041f8de" />
+### Show the list of functions on click
+<img width="1287" height="855" alt="image" src="https://github.com/user-attachments/assets/1d66c1c8-f07b-42e6-982d-764de0987489" />
