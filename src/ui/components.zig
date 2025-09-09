@@ -16,7 +16,7 @@ pub fn screen(ui: UiState, width: i32, height: i32) void {
             .width = @as(f32, @floatFromInt(width)),
             .height = @as(f32, @floatFromInt(height)),
         },
-        .flags = .{ .has_border = true },
+        .flags = .{},
     };
 
     Primitives.render_widget(ui, widget);
