@@ -60,6 +60,7 @@ pub const Lexer = struct {
                 tokens.deinit();
                 if (!self.quiet) {
                     std.log.err("Unhandle error parsing token '{c}' at column {d} line {d}", .{self.source[self.cursor-1], self.column, self.line});
+                    std.log.err("Error: {any}", .{err});
                 }
                 return err;
             }
@@ -315,6 +316,7 @@ pub const Lexer = struct {
 
         // String must end with "
         if (self.peek() != '"') {
+            std.log.err("Failed parsing string: {s}", .{ self.source[start..self.cursor]});
             return LexerError.UnexpectedEndOfString;
         }
 
