@@ -45,18 +45,29 @@ pub const Project = struct {
 
         var iterator = dir.iterate();
         while (try iterator.next()) |entry| {
-            if (entry.kind == .file and std.mem.endsWith(u8, entry.name, ".clj")) {
-                const file_path = try std.fmt.bufPrint(&path_buffer, "{s}/{s}", .{ folder_path, entry.name });
-                const contents = try self.getcontent(file_path);
+            const file_path = try std.fmt.bufPrint(&path_buffer, "{s}/{s}", .{ folder_path, entry.name });
+            switch (entry.kind) {
+                .file => {
+                    if (std.mem.endsWith(u8, entry.name, ".clj") or
+                        std.mem.endsWith(u8, entry.name, ".cljs") or
+                        std.mem.endsWith(u8, entry.name, ".cljc")) {
+                        const contents = try self.getcontent(file_path);
 
-                std.log.debug("Lexing file: {s}", .{entry.name});
-                var lexer = Lexer.init(self.allocator, contents);
-                const tokens = try lexer.getTokens();
-                defer tokens.deinit();
+                        std.log.debug("Lexing file: {s}", .{entry.name});
+                        var lexer = Lexer.init(self.allocator, contents);
+                        const tokens = try lexer.getTokens();
+                        defer tokens.deinit();
 
-                var parser = Parser.init(self.allocator, tokens.items);
-                const module = try parser.parse(file_path);
-                try self.modules.append(module);
+                        std.log.debug("Parsing file: {s}", .{entry.name});
+                        var parser = Parser.init(self.allocator, tokens.items);
+                        const module = try parser.parse(file_path);
+                        try self.modules.append(module);
+                    }
+                },
+                .directory => {
+                    try self.analyze(file_path);
+                },
+                else => {}
             }
         }
     }
