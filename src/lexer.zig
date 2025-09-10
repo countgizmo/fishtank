@@ -133,6 +133,22 @@ pub const Lexer = struct {
         }
     }
 
+    fn isNumberBegins(self: Lexer, ch: u8) bool {
+        if (std.ascii.isDigit(ch)) {
+            return true;
+        }
+
+        if (ch == '-' or ch == '+' or ch == '.') {
+            if (std.ascii.isDigit(self.peek())) {
+                return true;
+            } else {
+                return false;
+            }
+        }
+
+        return false;
+    }
+
     fn isKeywordBegins(ch: u8) bool {
         return ch == ':';
     }
@@ -177,7 +193,7 @@ pub const Lexer = struct {
                     } else if (isKeywordBegins(c)) {
                         const maybe_keyword = self.lexKeyword();
                         return maybe_keyword;
-                    } else if (std.ascii.isDigit(c)) {
+                    } else if (self.isNumberBegins(c)) {
                         const mayber_number = self.lexNumber();
                         return mayber_number;
                     } else if (c == '"') {

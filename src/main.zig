@@ -66,7 +66,8 @@ pub fn main() !void {
     }
 
     var project = try Project.init(gpa.allocator());
-    try project.analyze("test_subjects/very_simple_project");
+    // try project.analyze("test_subjects/very_simple_project");
+    try project.analyze("/Users/ziggy/Projects/private/clojure/zots/src");
     defer project.deinit();
 
     var treeMapItems = ArrayList(TreemapItem).init(gpa.allocator());
