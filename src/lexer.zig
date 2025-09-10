@@ -13,6 +13,7 @@ const LexerError = error {
     UnexpectedCharacter,
     UnexpectedFirstCharacter,
     UnexpectedNumberCharacter,
+    UnexpectedSymbolCharacter,
     UnexpectedEndOfString,
 };
 
@@ -59,7 +60,7 @@ pub const Lexer = struct {
             else => {
                 tokens.deinit();
                 if (!self.quiet) {
-                    std.log.err("Unhandle error parsing token '{c}' at column {d} line {d}", .{self.source[self.cursor-1], self.column, self.line});
+                    std.log.err("Unhandle error parsing token '{c}' at column {d} line {d}", .{self.source[self.cursor], self.column, self.line});
                     std.log.err("Error: {any}", .{err});
                 }
                 return err;
@@ -71,7 +72,7 @@ pub const Lexer = struct {
 
     fn isSpecialSymbolCharacter(ch: u8) bool {
         switch(ch) {
-            '.', '*', '+', '!', '-', '_', '?', '$', '%', '&', '=', '>', '<' => return true,
+            '.', '*', '+', '!', '-', '_', '?', '$', '%', '&', '=', '>', '<', '\'' => return true,
             else => {
                 return false;
             }
@@ -167,11 +168,12 @@ pub const Lexer = struct {
                 '@' => return self.makeToken(.At),
                 else => {
                     if (self.isSymbolBegins(c)) {
-                        const maybe_symbol = self.lexSymbolOrBuiltIn();
+                        const maybe_symbol = try self.lexSymbolOrBuiltIn();
+
                         if (isValidNamespacedSymbol(maybe_symbol)) {
                             return maybe_symbol;
                         }
-                        return LexerError.UnexpectedFirstCharacter;
+                        return LexerError.UnexpectedSymbolCharacter;
                     } else if (isKeywordBegins(c)) {
                         const maybe_keyword = self.lexKeyword();
                         return maybe_keyword;
@@ -209,13 +211,22 @@ pub const Lexer = struct {
         };
     }
 
+    fn isClosing(ch: u8) bool {
+        return (ch == '}' or ch == ']' or ch == ')');
+    }
 
-    fn lexSymbolOrBuiltIn(self: *Lexer) TokenWithPosition {
+    fn lexSymbolOrBuiltIn(self: *Lexer) !TokenWithPosition {
         const start_cursor = self.cursor - 1;
         const start_column = self.column;
 
-        while (self.cursor < self.source.len and isValidSymbolCharacter(self.source[self.cursor])) {
-            _ = self.advance();
+        while (self.cursor < self.source.len
+               and !isDelimiter(self.source[self.cursor])
+               and !isClosing(self.source[self.cursor])) {
+            if (isValidSymbolCharacter(self.source[self.cursor])) {
+                _ = self.advance();
+            } else {
+                return LexerError.UnexpectedSymbolCharacter;
+            }
         }
 
         const text = self.source[start_cursor..self.cursor];
@@ -267,10 +278,7 @@ pub const Lexer = struct {
         }
 
         const next = self.peek();
-        if (!isDelimiter(next) and
-            next != '}' and
-            next != ']' and
-            next != ')') {
+        if (!isDelimiter(next) and !isClosing(next)) {
             return LexerError.UnexpectedNumberCharacter;
         }
 
@@ -294,7 +302,14 @@ pub const Lexer = struct {
 
 
     fn isValidStringCharacter(ch: u8) bool {
-        return isValidSymbolCharacter(ch) or isDelimiter(ch);
+        switch (ch) {
+            '(', ')', '[', ']', '{', '}' => return true,
+            else => {
+                return isValidSymbolCharacter(ch) or isDelimiter(ch);
+            }
+        }
+
+        return false;
     }
 
     fn isEscapeSequence(self: Lexer, ch: u8) bool {
@@ -477,10 +492,10 @@ test "tokenize invalid symbols" {
         .{ .symbol = "-3value", .expected_error = LexerError.UnexpectedCharacter},
         .{ .symbol = ".4symbol", .expected_error = LexerError.UnexpectedCharacter},
         .{ .symbol = "/foo", .expected_error = LexerError.UnexpectedCharacter},
-        .{ .symbol = "foo/", .expected_error = LexerError.UnexpectedFirstCharacter},
-        .{ .symbol = "ns/foo/bar", .expected_error = LexerError.UnexpectedFirstCharacter},
-        .{ .symbol = "foo@bar", .expected_error = LexerError.UnexpectedCharacter},
-        .{ .symbol = "foo~bar", .expected_error = LexerError.UnexpectedCharacter},
+        .{ .symbol = "foo/", .expected_error = LexerError.UnexpectedSymbolCharacter},
+        .{ .symbol = "ns/foo/bar", .expected_error = LexerError.UnexpectedSymbolCharacter},
+        .{ .symbol = "foo@bar", .expected_error = LexerError.UnexpectedSymbolCharacter},
+        .{ .symbol = "foo~bar", .expected_error = LexerError.UnexpectedSymbolCharacter},
     };
 
     for (invalid_symbols) |invalid_symbol| {
