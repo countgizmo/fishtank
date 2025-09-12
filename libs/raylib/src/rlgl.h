@@ -710,6 +710,7 @@ RLAPI void rlSetBlendFactorsSeparate(int glSrcRGB, int glDstRGB, int glSrcAlpha,
 RLAPI void rlglInit(int width, int height);             // Initialize rlgl (buffers, shaders, textures, states)
 RLAPI void rlglClose(void);                             // De-initialize rlgl (buffers, shaders, textures)
 RLAPI void rlLoadExtensions(void *loader);              // Load OpenGL extensions (loader function required)
+RLAPI void *rlGetProcAddress(const char *procName);     // Get OpenGL procedure address
 RLAPI int rlGetVersion(void);                           // Get current OpenGL version
 RLAPI void rlSetFramebufferWidth(int width);            // Set current framebuffer width
 RLAPI int rlGetFramebufferWidth(void);                  // Get default framebuffer width
@@ -869,6 +870,7 @@ RLAPI void rlLoadDrawQuad(void);     // Load and draw a quad
 #elif defined(GRAPHICS_API_OPENGL_ES2)
     // NOTE: OpenGL ES 2.0 can be enabled on Desktop platforms,
     // in that case, functions are loaded from a custom glad for OpenGL ES 2.0
+    // TODO: OpenGL ES 2.0 support shouldn't be platform-dependant, neither require GLAD
     #if defined(PLATFORM_DESKTOP_GLFW) || defined(PLATFORM_DESKTOP_SDL)
         #define GLAD_GLES2_IMPLEMENTATION
         #include "external/glad_gles2.h"
@@ -888,7 +890,7 @@ RLAPI void rlLoadDrawQuad(void);     // Load and draw a quad
     #endif
 #endif
 
-#include <stdlib.h>                     // Required for: malloc(), free()
+#include <stdlib.h>                     // Required for: calloc(), free()
 #include <string.h>                     // Required for: strcmp(), strlen() [Used in rlglInit(), on extensions loading]
 #include <math.h>                       // Required for: sqrtf(), sinf(), cosf(), floor(), log()
 
@@ -1038,12 +1040,17 @@ RLAPI void rlLoadDrawQuad(void);     // Load and draw a quad
 #endif
 
 //----------------------------------------------------------------------------------
-// Types and Structures Definition
+// Module Types and Structures Definition
 //----------------------------------------------------------------------------------
 #if defined(GRAPHICS_API_OPENGL_33) || defined(GRAPHICS_API_OPENGL_ES2)
+
+typedef void *(*rlglLoadProc)(const char *name);   // OpenGL extension functions loader signature (same as GLADloadproc)
+
 typedef struct rlglData {
     rlRenderBatch *currentBatch;            // Current render batch
     rlRenderBatch defaultBatch;             // Default internal render batch
+
+    rlglLoadProc loader;                    // OpenGL function loader
 
     struct {
         int vertexCounter;                  // Current active render batch vertex counter (generic, used for all batches)
@@ -1114,8 +1121,6 @@ typedef struct rlglData {
     } ExtSupported;     // Extensions supported flags
 } rlglData;
 
-typedef void *(*rlglLoadProc)(const char *name);   // OpenGL extension functions loader signature (same as GLADloadproc)
-
 #endif  // GRAPHICS_API_OPENGL_33 || GRAPHICS_API_OPENGL_ES2
 
 //----------------------------------------------------------------------------------
@@ -1141,7 +1146,7 @@ static PFNGLVERTEXATTRIBDIVISOREXTPROC glVertexAttribDivisor = NULL;
 #endif
 
 //----------------------------------------------------------------------------------
-// Module specific Functions Declaration
+// Module Functions Declaration
 //----------------------------------------------------------------------------------
 #if defined(GRAPHICS_API_OPENGL_33) || defined(GRAPHICS_API_OPENGL_ES2)
 static void rlLoadShaderDefault(void);      // Load default shader
@@ -1153,16 +1158,16 @@ static const char *rlGetCompressedFormatName(int format); // Get compressed form
 
 static int rlGetPixelDataSize(int width, int height, int format);   // Get pixel data size in bytes (image or texture)
 
+static Matrix rlMatrixIdentity(void);                       // Get identity matrix
+#if defined(GRAPHICS_API_OPENGL_33) || defined(GRAPHICS_API_OPENGL_ES2)
 // Auxiliar matrix math functions
-typedef struct rl_float16 {
-    float v[16];
-} rl_float16;
+typedef struct rl_float16 { float v[16]; } rl_float16;
 static rl_float16 rlMatrixToFloatV(Matrix mat);             // Get float array of matrix data
 #define rlMatrixToFloat(mat) (rlMatrixToFloatV(mat).v)      // Get float vector for Matrix
-static Matrix rlMatrixIdentity(void);                       // Get identity matrix
 static Matrix rlMatrixMultiply(Matrix left, Matrix right);  // Multiply two matrices
 static Matrix rlMatrixTranspose(Matrix mat);                // Transposes provided matrix
 static Matrix rlMatrixInvert(Matrix mat);                   // Invert provided matrix
+#endif
 
 //----------------------------------------------------------------------------------
 // Module Functions Definition - Matrix operations
@@ -1748,7 +1753,6 @@ void rlTextureParameters(unsigned int id, int param, int value)
 #endif
             }
             else glTexParameteri(GL_TEXTURE_2D, param, value);
-
         } break;
         case RL_TEXTURE_MAG_FILTER:
         case RL_TEXTURE_MIN_FILTER: glTexParameteri(GL_TEXTURE_2D, param, value); break;
@@ -1793,7 +1797,6 @@ void rlCubemapParameters(unsigned int id, int param, int value)
                 else TRACELOG(RL_LOG_WARNING, "GL: Clamp mirror wrap mode not supported (GL_MIRROR_CLAMP_EXT)");
             }
             else glTexParameteri(GL_TEXTURE_CUBE_MAP, param, value);
-
         } break;
         case RL_TEXTURE_MAG_FILTER:
         case RL_TEXTURE_MIN_FILTER: glTexParameteri(GL_TEXTURE_CUBE_MAP, param, value); break;
@@ -1887,7 +1890,7 @@ void rlActiveDrawBuffers(int count)
 
     if (count > 0)
     {
-        if (count > 8) TRACELOG(LOG_WARNING, "GL: Max color buffers limited to 8");
+        if (count > 8) TRACELOG(RL_LOG_WARNING, "GL: Max color buffers limited to 8");
         else
         {
             unsigned int buffers[8] = {
@@ -1904,7 +1907,7 @@ void rlActiveDrawBuffers(int count)
             glDrawBuffers(count, buffers);
         }
     }
-    else TRACELOG(LOG_WARNING, "GL: One color buffer active by default");
+    else TRACELOG(RL_LOG_WARNING, "GL: One color buffer active by default");
 #endif
 }
 
@@ -2112,14 +2115,12 @@ void rlSetBlendMode(int mode)
             {
                 // NOTE: Using GL blend src/dst factors and GL equation configured with rlSetBlendFactors()
                 glBlendFunc(RLGL.State.glBlendSrcFactor, RLGL.State.glBlendDstFactor); glBlendEquation(RLGL.State.glBlendEquation);
-
             } break;
             case RL_BLEND_CUSTOM_SEPARATE:
             {
                 // NOTE: Using GL blend src/dst factors and GL equation configured with rlSetBlendFactorsSeparate()
                 glBlendFuncSeparate(RLGL.State.glBlendSrcFactorRGB, RLGL.State.glBlendDestFactorRGB, RLGL.State.glBlendSrcFactorAlpha, RLGL.State.glBlendDestFactorAlpha);
                 glBlendEquationSeparate(RLGL.State.glBlendEquationRGB, RLGL.State.glBlendEquationAlpha);
-
             } break;
             default: break;
         }
@@ -2223,10 +2224,10 @@ static void GLAPIENTRY rlDebugMessageCallback(GLenum source, GLenum type, GLuint
         default: break;
     }
 
-    TRACELOG(LOG_WARNING, "GL: OpenGL debug message: %s", message);
-    TRACELOG(LOG_WARNING, "    > Type: %s", msgType);
-    TRACELOG(LOG_WARNING, "    > Source = %s", msgSource);
-    TRACELOG(LOG_WARNING, "    > Severity = %s", msgSeverity);
+    TRACELOG(RL_LOG_WARNING, "GL: OpenGL debug message: %s", message);
+    TRACELOG(RL_LOG_WARNING, "    > Type: %s", msgType);
+    TRACELOG(RL_LOG_WARNING, "    > Source = %s", msgSource);
+    TRACELOG(RL_LOG_WARNING, "    > Severity = %s", msgSeverity);
 }
 #endif
 
@@ -2429,7 +2430,7 @@ void rlLoadExtensions(void *loader)
 
     // Get supported extensions list
     GLint numExt = 0;
-    const char **extList = RL_MALLOC(512*sizeof(const char *)); // Allocate 512 strings pointers (2 KB)
+    const char **extList = (const char **)RL_CALLOC(512, sizeof(const char *)); // Allocate 512 strings pointers (2 KB)
     const char *extensions = (const char *)glGetString(GL_EXTENSIONS);  // One big const string
 
     // NOTE: We have to duplicate string because glGetString() returns a const string
@@ -2572,6 +2573,8 @@ void rlLoadExtensions(void *loader)
     TRACELOG(RL_LOG_INFO, "    > GLSL:     %s", glGetString(GL_SHADING_LANGUAGE_VERSION));
 
 #if defined(GRAPHICS_API_OPENGL_33) || defined(GRAPHICS_API_OPENGL_ES2)
+    RLGL.loader = (rlglLoadProc)loader;
+
     // NOTE: Anisotropy levels capability is an extension
     #ifndef GL_MAX_TEXTURE_MAX_ANISOTROPY_EXT
         #define GL_MAX_TEXTURE_MAX_ANISOTROPY_EXT 0x84FF
@@ -2627,6 +2630,16 @@ void rlLoadExtensions(void *loader)
 #endif  // RLGL_SHOW_GL_DETAILS_INFO
 
 #endif  // GRAPHICS_API_OPENGL_33 || GRAPHICS_API_OPENGL_ES2
+}
+
+// Get OpenGL procedure address
+void *rlGetProcAddress(const char *procName)
+{
+    void *func = NULL;
+#if defined(GRAPHICS_API_OPENGL_33) || defined(GRAPHICS_API_OPENGL_ES2)
+    func = RLGL.loader(procName);
+#endif
+    return func;
 }
 
 // Get current OpenGL version
@@ -2729,21 +2742,21 @@ rlRenderBatch rlLoadRenderBatch(int numBuffers, int bufferElements)
 #if defined(GRAPHICS_API_OPENGL_33) || defined(GRAPHICS_API_OPENGL_ES2)
     // Initialize CPU (RAM) vertex buffers (position, texcoord, color data and indexes)
     //--------------------------------------------------------------------------------------------
-    batch.vertexBuffer = (rlVertexBuffer *)RL_MALLOC(numBuffers*sizeof(rlVertexBuffer));
+    batch.vertexBuffer = (rlVertexBuffer *)RL_CALLOC(numBuffers, sizeof(rlVertexBuffer));
 
     for (int i = 0; i < numBuffers; i++)
     {
         batch.vertexBuffer[i].elementCount = bufferElements;
 
-        batch.vertexBuffer[i].vertices = (float *)RL_MALLOC(bufferElements*3*4*sizeof(float));        // 3 float by vertex, 4 vertex by quad
-        batch.vertexBuffer[i].texcoords = (float *)RL_MALLOC(bufferElements*2*4*sizeof(float));       // 2 float by texcoord, 4 texcoord by quad
-        batch.vertexBuffer[i].normals = (float *)RL_MALLOC(bufferElements*3*4*sizeof(float));        // 3 float by vertex, 4 vertex by quad
-        batch.vertexBuffer[i].colors = (unsigned char *)RL_MALLOC(bufferElements*4*4*sizeof(unsigned char));   // 4 float by color, 4 colors by quad
+        batch.vertexBuffer[i].vertices = (float *)RL_CALLOC(bufferElements*3*4, sizeof(float));     // 3 float by vertex, 4 vertex by quad
+        batch.vertexBuffer[i].texcoords = (float *)RL_CALLOC(bufferElements*2*4, sizeof(float));    // 2 float by texcoord, 4 texcoord by quad
+        batch.vertexBuffer[i].normals = (float *)RL_CALLOC(bufferElements*3*4, sizeof(float));      // 3 float by vertex, 4 vertex by quad
+        batch.vertexBuffer[i].colors = (unsigned char *)RL_CALLOC(bufferElements*4*4, sizeof(unsigned char));   // 4 float by color, 4 colors by quad
 #if defined(GRAPHICS_API_OPENGL_33)
-        batch.vertexBuffer[i].indices = (unsigned int *)RL_MALLOC(bufferElements*6*sizeof(unsigned int));      // 6 int by quad (indices)
+        batch.vertexBuffer[i].indices = (unsigned int *)RL_CALLOC(bufferElements*6, sizeof(unsigned int));      // 6 int by quad (indices)
 #endif
 #if defined(GRAPHICS_API_OPENGL_ES2)
-        batch.vertexBuffer[i].indices = (unsigned short *)RL_MALLOC(bufferElements*6*sizeof(unsigned short));  // 6 int by quad (indices)
+        batch.vertexBuffer[i].indices = (unsigned short *)RL_CALLOC(bufferElements*6, sizeof(unsigned short));  // 6 int by quad (indices)
 #endif
 
         for (int j = 0; j < (3*4*bufferElements); j++) batch.vertexBuffer[i].vertices[j] = 0.0f;
@@ -2831,7 +2844,7 @@ rlRenderBatch rlLoadRenderBatch(int numBuffers, int bufferElements)
 
     // Init draw calls tracking system
     //--------------------------------------------------------------------------------------------
-    batch.draws = (rlDrawCall *)RL_MALLOC(RL_DEFAULT_BATCH_DRAWCALLS*sizeof(rlDrawCall));
+    batch.draws = (rlDrawCall *)RL_CALLOC(RL_DEFAULT_BATCH_DRAWCALLS, sizeof(rlDrawCall));
 
     for (int i = 0; i < RL_DEFAULT_BATCH_DRAWCALLS; i++)
     {
@@ -3231,6 +3244,7 @@ unsigned int rlLoadTexture(const void *data, int width, int height, int format, 
     int mipWidth = width;
     int mipHeight = height;
     int mipOffset = 0;          // Mipmap data offset, only used for tracelog
+    (void)mipOffset;            // Used to avoid gcc warnings about unused variable
 
     // NOTE: Added pointer math separately from function to avoid UBSAN complaining
     unsigned char *dataPtr = NULL;
@@ -3636,7 +3650,7 @@ void *rlReadTexturePixels(unsigned int id, int width, int height, int format)
 
     if ((glInternalFormat != 0) && (format < RL_PIXELFORMAT_COMPRESSED_DXT1_RGB))
     {
-        pixels = RL_MALLOC(size);
+        pixels = RL_CALLOC(size, 1);
         glGetTexImage(GL_TEXTURE_2D, 0, glFormat, glType, pixels);
     }
     else TRACELOG(RL_LOG_WARNING, "TEXTURE: [ID %i] Data retrieval not suported for pixel format (%i)", id, format);
@@ -3661,7 +3675,7 @@ void *rlReadTexturePixels(unsigned int id, int width, int height, int format)
     glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, id, 0);
 
     // We read data as RGBA because FBO texture is configured as RGBA, despite binding another texture format
-    pixels = (unsigned char *)RL_MALLOC(rlGetPixelDataSize(width, height, RL_PIXELFORMAT_UNCOMPRESSED_R8G8B8A8));
+    pixels = RL_CALLOC(rlGetPixelDataSize(width, height, RL_PIXELFORMAT_UNCOMPRESSED_R8G8B8A8), 1);
     glReadPixels(0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
 
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
@@ -3747,19 +3761,16 @@ void rlFramebufferAttach(unsigned int fboId, unsigned int texId, int attachType,
             if (texType == RL_ATTACHMENT_TEXTURE2D) glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0 + attachType, GL_TEXTURE_2D, texId, mipLevel);
             else if (texType == RL_ATTACHMENT_RENDERBUFFER) glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0 + attachType, GL_RENDERBUFFER, texId);
             else if (texType >= RL_ATTACHMENT_CUBEMAP_POSITIVE_X) glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0 + attachType, GL_TEXTURE_CUBE_MAP_POSITIVE_X + texType, texId, mipLevel);
-
         } break;
         case RL_ATTACHMENT_DEPTH:
         {
             if (texType == RL_ATTACHMENT_TEXTURE2D) glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, texId, mipLevel);
             else if (texType == RL_ATTACHMENT_RENDERBUFFER)  glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, texId);
-
         } break;
         case RL_ATTACHMENT_STENCIL:
         {
             if (texType == RL_ATTACHMENT_TEXTURE2D) glFramebufferTexture2D(GL_FRAMEBUFFER, GL_STENCIL_ATTACHMENT, GL_TEXTURE_2D, texId, mipLevel);
             else if (texType == RL_ATTACHMENT_RENDERBUFFER)  glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_STENCIL_ATTACHMENT, GL_RENDERBUFFER, texId);
-
         } break;
         default: break;
     }
@@ -4185,6 +4196,9 @@ unsigned int rlCompileShader(const char *shaderCode, int type)
             RL_FREE(log);
         }
 
+        // Unload object allocated by glCreateShader(),
+        // despite failing in the compilation process
+        glDeleteShader(shader);
         shader = 0;
     }
     else
@@ -4851,7 +4865,7 @@ const char *rlGetPixelFormatName(unsigned int format)
 }
 
 //----------------------------------------------------------------------------------
-// Module specific Functions Definition
+// Module Functions Definition
 //----------------------------------------------------------------------------------
 #if defined(GRAPHICS_API_OPENGL_33) || defined(GRAPHICS_API_OPENGL_ES2)
 // Load default shader (just vertex positioning and texture coloring)
@@ -5133,7 +5147,20 @@ static int rlGetPixelDataSize(int width, int height, int format)
 }
 
 // Auxiliar math functions
+//-------------------------------------------------------------------------------
+// Get identity matrix
+static Matrix rlMatrixIdentity(void)
+{
+    Matrix result = {
+        1.0f, 0.0f, 0.0f, 0.0f,
+        0.0f, 1.0f, 0.0f, 0.0f,
+        0.0f, 0.0f, 1.0f, 0.0f,
+        0.0f, 0.0f, 0.0f, 1.0f
+    };
 
+    return result;
+}
+#if defined(GRAPHICS_API_OPENGL_33) || defined(GRAPHICS_API_OPENGL_ES2)
 // Get float array of matrix data
 static rl_float16 rlMatrixToFloatV(Matrix mat)
 {
@@ -5155,19 +5182,6 @@ static rl_float16 rlMatrixToFloatV(Matrix mat)
     result.v[13] = mat.m13;
     result.v[14] = mat.m14;
     result.v[15] = mat.m15;
-
-    return result;
-}
-
-// Get identity matrix
-static Matrix rlMatrixIdentity(void)
-{
-    Matrix result = {
-        1.0f, 0.0f, 0.0f, 0.0f,
-        0.0f, 1.0f, 0.0f, 0.0f,
-        0.0f, 0.0f, 1.0f, 0.0f,
-        0.0f, 0.0f, 0.0f, 1.0f
-    };
 
     return result;
 }
@@ -5269,5 +5283,6 @@ static Matrix rlMatrixInvert(Matrix mat)
 
     return result;
 }
+#endif
 
 #endif  // RLGL_IMPLEMENTATION

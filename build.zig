@@ -12,10 +12,11 @@ pub fn build(b: *std.Build) !void {
 
     const exe = b.addExecutable(.{
         .name = "fishtank",
-        .root_source_file = b.path("src/main.zig"),
-        .target = target,
-        .optimize = optimize,
     });
+
+    exe.root_module.source_file = b.path("src/main.zig");
+    exe.root_module.target = target;
+    exe.root_module.optimize = optimize;
 
     exe.addIncludePath(b.path("libs/raylib/src"));
 

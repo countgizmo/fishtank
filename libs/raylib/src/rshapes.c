@@ -3,17 +3,17 @@
 *   rshapes - Basic functions to draw 2d shapes and check collisions
 *
 *   ADDITIONAL NOTES:
-*       Shapes can be draw using 3 types of primitives: LINES, TRIANGLES and QUADS.
+*       Shapes can be draw using 3 types of primitives: LINES, TRIANGLES and QUADS
 *       Some functions implement two drawing options: TRIANGLES and QUADS, by default TRIANGLES
 *       are used but QUADS implementation can be selected with SUPPORT_QUADS_DRAW_MODE define
 *
 *       Some functions define texture coordinates (rlTexCoord2f()) for the shapes and use a
 *       user-provided texture with SetShapesTexture(), the pourpouse of this implementation
-*       is allowing to reduce draw calls when combined with a texture-atlas.
+*       is allowing to reduce draw calls when combined with a texture-atlas
 *
 *       By default, raylib sets the default texture and rectangle at InitWindow()[rcore] to one
 *       white character of default font [rtext], this way, raylib text and shapes can be draw with
-*       a single draw call and it also allows users to configure it the same way with their own fonts.
+*       a single draw call and it also allows users to configure it the same way with their own fonts
 *
 *   CONFIGURATION:
 *       #define SUPPORT_MODULE_RSHAPES
@@ -83,14 +83,13 @@ static Texture2D texShapes = { 1, 1, 1, 1, 7 };                // Texture used o
 static Rectangle texShapesRec = { 0.0f, 0.0f, 1.0f, 1.0f };    // Texture source rectangle used on shapes drawing
 
 //----------------------------------------------------------------------------------
-// Module specific Functions Declaration
+// Module Internal Functions Declaration
 //----------------------------------------------------------------------------------
 static float EaseCubicInOut(float t, float b, float c, float d);    // Cubic easing
 
 //----------------------------------------------------------------------------------
 // Module Functions Definition
 //----------------------------------------------------------------------------------
-
 // Set texture and rectangle to be used on shapes drawing
 // NOTE: It can be useful when using basic shapes and one single font,
 // defining a font char white rectangle would allow drawing everything in a single draw call
@@ -471,13 +470,19 @@ void DrawCircleLinesV(Vector2 center, float radius, Color color)
 // Draw ellipse
 void DrawEllipse(int centerX, int centerY, float radiusH, float radiusV, Color color)
 {
+    DrawEllipseV((Vector2){ (float)centerX, (float)centerY }, radiusH, radiusV, color);
+}
+
+// Draw ellipse (Vector version)
+void DrawEllipseV(Vector2 center, float radiusH, float radiusV, Color color)
+{
     rlBegin(RL_TRIANGLES);
         for (int i = 0; i < 360; i += 10)
         {
             rlColor4ub(color.r, color.g, color.b, color.a);
-            rlVertex2f((float)centerX, (float)centerY);
-            rlVertex2f((float)centerX + cosf(DEG2RAD*(i + 10))*radiusH, (float)centerY + sinf(DEG2RAD*(i + 10))*radiusV);
-            rlVertex2f((float)centerX + cosf(DEG2RAD*i)*radiusH, (float)centerY + sinf(DEG2RAD*i)*radiusV);
+            rlVertex2f(center.x,  center.y);
+            rlVertex2f(center.x + cosf(DEG2RAD*(i + 10))*radiusH, center.y + sinf(DEG2RAD*(i + 10))*radiusV);
+            rlVertex2f(center.x + cosf(DEG2RAD*i)*radiusH, center.y + sinf(DEG2RAD*i)*radiusV);
         }
     rlEnd();
 }
@@ -485,12 +490,18 @@ void DrawEllipse(int centerX, int centerY, float radiusH, float radiusV, Color c
 // Draw ellipse outline
 void DrawEllipseLines(int centerX, int centerY, float radiusH, float radiusV, Color color)
 {
+    DrawEllipseLinesV((Vector2){ (float)centerX, (float)centerY }, radiusH, radiusV, color);
+}
+
+// Draw ellipse outline
+void DrawEllipseLinesV(Vector2 center, float radiusH, float radiusV, Color color)
+{
     rlBegin(RL_LINES);
         for (int i = 0; i < 360; i += 10)
         {
             rlColor4ub(color.r, color.g, color.b, color.a);
-            rlVertex2f(centerX + cosf(DEG2RAD*(i + 10))*radiusH, centerY + sinf(DEG2RAD*(i + 10))*radiusV);
-            rlVertex2f(centerX + cosf(DEG2RAD*i)*radiusH, centerY + sinf(DEG2RAD*i)*radiusV);
+            rlVertex2f(center.x + cosf(DEG2RAD*(i + 10))*radiusH, center.y + sinf(DEG2RAD*(i + 10))*radiusV);
+            rlVertex2f(center.x + cosf(DEG2RAD*i)*radiusH, center.y + sinf(DEG2RAD*i)*radiusV);
         }
     rlEnd();
 }
@@ -774,7 +785,7 @@ void DrawRectangleGradientH(int posX, int posY, int width, int height, Color lef
 }
 
 // Draw a gradient-filled rectangle
-void DrawRectangleGradientEx(Rectangle rec, Color topLeft, Color bottomLeft, Color topRight, Color bottomRight)
+void DrawRectangleGradientEx(Rectangle rec, Color topLeft, Color bottomLeft, Color bottomRight, Color topRight)
 {
     rlSetTexture(GetShapesTexture().id);
     Rectangle shapeRect = GetShapesTextureRectangle();
@@ -791,11 +802,11 @@ void DrawRectangleGradientEx(Rectangle rec, Color topLeft, Color bottomLeft, Col
         rlTexCoord2f(shapeRect.x/texShapes.width, (shapeRect.y + shapeRect.height)/texShapes.height);
         rlVertex2f(rec.x, rec.y + rec.height);
 
-        rlColor4ub(topRight.r, topRight.g, topRight.b, topRight.a);
+        rlColor4ub(bottomRight.r, bottomRight.g, bottomRight.b, bottomRight.a);
         rlTexCoord2f((shapeRect.x + shapeRect.width)/texShapes.width, (shapeRect.y + shapeRect.height)/texShapes.height);
         rlVertex2f(rec.x + rec.width, rec.y + rec.height);
 
-        rlColor4ub(bottomRight.r, bottomRight.g, bottomRight.b, bottomRight.a);
+        rlColor4ub(topRight.r, topRight.g, topRight.b, topRight.a);
         rlTexCoord2f((shapeRect.x + shapeRect.width)/texShapes.width, shapeRect.y/texShapes.height);
         rlVertex2f(rec.x + rec.width, rec.y);
     rlEnd();
@@ -2359,7 +2370,7 @@ bool CheckCollisionPointLine(Vector2 point, Vector2 p1, Vector2 p2, int threshol
 }
 
 // Check if circle collides with a line created between two points [p1] and [p2]
-RLAPI bool CheckCollisionCircleLine(Vector2 center, float radius, Vector2 p1, Vector2 p2)
+bool CheckCollisionCircleLine(Vector2 center, float radius, Vector2 p1, Vector2 p2)
 {
     float dx = p1.x - p2.x;
     float dy = p1.y - p2.y;
@@ -2408,7 +2419,7 @@ Rectangle GetCollisionRec(Rectangle rec1, Rectangle rec2)
 }
 
 //----------------------------------------------------------------------------------
-// Module specific Functions Definition
+// Module Internal Functions Definition
 //----------------------------------------------------------------------------------
 
 // Cubic easing in-out
