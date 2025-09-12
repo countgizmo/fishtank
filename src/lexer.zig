@@ -182,6 +182,11 @@ pub const Lexer = struct {
                 '\'' => return self.makeToken(.Quote),
                 '#' => return self.makeToken(.Pound),
                 '@' => return self.makeToken(.At),
+                '/' => return self.makeToken(.Slash),
+                '^' => return self.makeToken(.Carret),
+                '.' => return self.makeToken(.Dot),
+                '`' => return self.makeToken(.Backquote),
+                '~' => return self.makeToken(.Tilde),
                 else => {
                     if (self.isSymbolBegins(c)) {
                         const maybe_symbol = try self.lexSymbolOrBuiltIn();
@@ -199,7 +204,11 @@ pub const Lexer = struct {
                     } else if (c == '"') {
                         const maybe_string = self.lexString();
                         return maybe_string;
-                    }else {
+                    } else if (c == '-') {
+                        if (!isDelimiter(self.peek())) {
+                            return self.makeToken(.Minus);
+                        }
+                    } else {
                         return LexerError.UnexpectedCharacter;
                     }
                 }
