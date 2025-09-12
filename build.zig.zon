@@ -2,6 +2,7 @@
     .name = .fishtank,
     .fingerprint = 0xc52a54a505f42550,
     .version = "0.1.0",
+    .minimum_zig_version = "0.15.1",
     .dependencies = .{
         .raylib = .{
             .path = "libs/raylib",  // Assuming raylib is in libs/raylib

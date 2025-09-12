@@ -1,7 +1,6 @@
 const std = @import("std");
-const rl = @cImport({
-    @cInclude("raylib.h");
-});
+const rl = @import("raylib.zig").rl;
+
 const token_module = @import("token.zig");
 const Token = token_module.Token;
 const TokenWithPosition = token_module.TokenWithPosition;
@@ -59,19 +58,17 @@ pub fn main() !void {
         },
     };
 
-    defer rl.UnloadFont(ui.text_config.font.?);
+    defer rl.UnloadFont(ui.text_config.font);
 
-    if (ui.text_config.font) |*font| {
-        rl.SetTextureFilter(font.texture, rl.TEXTURE_FILTER_BILINEAR);
-    }
+    rl.SetTextureFilter(ui.text_config.font.texture, rl.TEXTURE_FILTER_BILINEAR);
 
     var project = try Project.init(gpa.allocator());
     // try project.analyze("test_subjects/very_simple_project");
     try project.analyze("/Users/ziggy/Projects/private/clojure/zots/src");
     defer project.deinit();
 
-    var treeMapItems = ArrayList(TreemapItem).init(gpa.allocator());
-    defer treeMapItems.deinit();
+    var treeMapItems: ArrayList(TreemapItem) = .empty;
+    defer treeMapItems.deinit(gpa.allocator());
 
     for (project.modules.items) |*project_module| {
         const mapitem = TreemapItem {
@@ -81,7 +78,7 @@ pub fn main() !void {
                 .module = project_module,
             },
         };
-        try treeMapItems.append(mapitem);
+        try treeMapItems.append(gpa.allocator(), mapitem);
     }
 
     while (!rl.WindowShouldClose()) {

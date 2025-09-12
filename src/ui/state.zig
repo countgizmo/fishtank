@@ -1,10 +1,8 @@
 const std = @import("std");
-const rl = @cImport({
-    @cInclude("raylib.h");
-});
+const rl = @import("../raylib.zig").rl;
 
 pub const TextConfig = struct{
-    font: ?rl.Font = null
+    font: rl.Font,
 };
 
 pub const ActiveTextStyle = struct{

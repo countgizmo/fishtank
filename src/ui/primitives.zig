@@ -1,7 +1,5 @@
 const std = @import("std");
-const rl = @cImport({
-    @cInclude("raylib.h");
-});
+const rl = @import("../raylib.zig").rl;
 const UiState = @import("state.zig").UiState;
 
 pub const bg_color = rl.Color{
@@ -96,7 +94,7 @@ pub fn render_widget(ui: UiState, widget: Widget) void {
             .y = widget.rect.y + text_padding
         };
         rl.DrawTextEx(
-            ui.text_config.font.?,
+            ui.text_config.font,
             label_text,
             text_pos ,
             @as(f32, @floatFromInt(ui.active_text_style.font_size)),

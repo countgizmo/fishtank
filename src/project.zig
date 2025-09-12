@@ -16,7 +16,7 @@ pub const Project = struct {
         return Project {
             .allocator = allocator,
             .arena = std.heap.ArenaAllocator.init(allocator),
-            .modules = ArrayList(Module).init(allocator),
+            .modules = .empty,
         };
     }
 
@@ -25,7 +25,7 @@ pub const Project = struct {
         for (self.modules.items) |*module| {
             module.deinit();
         }
-        self.modules.deinit();
+        self.modules.deinit(self.allocator);
     }
 
     fn getcontent(self: *Project, file_path: []const u8) ![]u8 {
@@ -55,13 +55,13 @@ pub const Project = struct {
 
                         std.log.debug("Lexing file: {s}", .{entry.name});
                         var lexer = Lexer.init(self.allocator, contents);
-                        const tokens = try lexer.getTokens();
-                        defer tokens.deinit();
+                        var tokens = try lexer.getTokens();
+                        defer tokens.deinit(self.allocator);
 
                         std.log.debug("Parsing file: {s}", .{entry.name});
                         var parser = Parser.init(self.allocator, tokens.items);
                         const module = try parser.parse(file_path);
-                        try self.modules.append(module);
+                        try self.modules.append(self.allocator, module);
                     }
                 },
                 .directory => {

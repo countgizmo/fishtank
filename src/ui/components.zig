@@ -1,7 +1,5 @@
 const std = @import("std");
-const rl = @cImport({
-    @cInclude("raylib.h");
-});
+const rl = @import("../raylib.zig").rl;
 const Primitives = @import("primitives.zig");
 const UiState = @import("state.zig").UiState;
 const Widget = Primitives.Widget;
@@ -26,7 +24,7 @@ pub fn header(ui: *UiState, x: i32, y: i32, text: []const u8) void {
     var buf: [255:0]u8 = undefined;
     const label_text = std.fmt.bufPrintZ(&buf, "{s}", .{text}) catch "";
 
-    const text_size = rl.MeasureTextEx(ui.text_config.font.?, label_text, Primitives.big_font_size, 1);
+    const text_size = rl.MeasureTextEx(ui.text_config.font, label_text, Primitives.big_font_size, 1);
 
     ui.active_text_style.font_size = Primitives.big_font_size;
 
@@ -45,7 +43,7 @@ pub fn label(ui: *UiState, x: i32, y: i32, text: []const u8) void {
     var buf: [255:0]u8 = undefined;
     const label_text = std.fmt.bufPrintZ(&buf, "{s}", .{text}) catch "";
 
-    const text_size = rl.MeasureTextEx(ui.text_config.font.?, label_text, Primitives.normal_font_size, 1);
+    const text_size = rl.MeasureTextEx(ui.text_config.font, label_text, Primitives.normal_font_size, 1);
 
     ui.active_text_style.font_size = Primitives.normal_font_size;
 

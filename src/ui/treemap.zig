@@ -3,9 +3,7 @@ const UiState = @import("state.zig").UiState;
 const primitives = @import("primitives.zig");
 const Components = @import("components.zig");
 const Module = @import("../parser.zig").Module;
-const rl = @cImport({
-    @cInclude("raylib.h");
-});
+const rl = @import("../raylib.zig").rl;
 
 pub const TreemapItemContext = struct {
     module: *Module,

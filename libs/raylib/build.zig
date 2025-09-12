@@ -500,16 +500,6 @@ pub fn build(b: *std.Build) !void {
     lib.installHeader(b.path("src/rlgl.h"), "rlgl.h");
 
     b.installArtifact(lib);
-
-    const examples = b.step("examples", "Build/Install all examples");
-    examples.dependOn(try addExamples("audio", b, target, optimize, lib));
-    examples.dependOn(try addExamples("core", b, target, optimize, lib));
-    examples.dependOn(try addExamples("models", b, target, optimize, lib));
-    examples.dependOn(try addExamples("others", b, target, optimize, lib));
-    examples.dependOn(try addExamples("shaders", b, target, optimize, lib));
-    examples.dependOn(try addExamples("shapes", b, target, optimize, lib));
-    examples.dependOn(try addExamples("text", b, target, optimize, lib));
-    examples.dependOn(try addExamples("textures", b, target, optimize, lib));
 }
 
 fn addExamples(

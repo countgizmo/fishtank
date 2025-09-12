@@ -21,10 +21,10 @@ pub const RequiredLib = struct {
     refer: ?ReferOption,
     //TODO(evgheni): as-alias, etc.
 
-    pub fn deinit(self: *RequiredLib) void {
-        if (self.refer) |ref| {
-            switch (ref) {
-                .symbols => |list| list.deinit(),
+    pub fn deinit(self: *RequiredLib, allocator: Allocator) void {
+        if (self.refer) |*ref| {
+            switch (ref.*) {
+                .symbols => |*list| list.deinit(allocator),
                 .all => {},
             }
         }
@@ -45,6 +45,7 @@ pub const Function = struct {
 pub const Module = struct {
     name: []const u8,
     file_path: []const u8,
+    allocator: Allocator,
 
     required_modules: ArrayList(RequiredLib),
     expressions: ArrayList(Expression),
@@ -57,33 +58,34 @@ pub const Module = struct {
         return Module {
             .name = "",
             .file_path = file_path,
-            .required_modules = ArrayList(RequiredLib).init(allocator),
-            .expressions = ArrayList(Expression).init(allocator),
-            .functions = ArrayList(Function).init(allocator),
+            .allocator = allocator,
+            .required_modules = .empty,
+            .expressions = .empty,
+            .functions = .empty,
         };
     }
 
     pub fn deinit(self: *Module) void {
         for (self.expressions.items) |*expression| {
-            expression.deinit();
+            expression.deinit(self.allocator);
         }
 
 
         for (self.required_modules.items) |*req_module| {
-            req_module.deinit();
+            req_module.deinit(self.allocator);
         }
 
-        self.expressions.deinit();
-        self.required_modules.deinit();
-        self.functions.deinit();
+        self.expressions.deinit(self.allocator);
+        self.required_modules.deinit(self.allocator);
+        self.functions.deinit(self.allocator);
     }
 
     pub fn addRequiredLib(self: *Module, lib: RequiredLib) !void {
-        try self.required_modules.append(lib);
+        try self.required_modules.append(self.allocator, lib);
     }
 
     pub fn addExpression(self: *Module, expr: Expression) !void {
-        try self.expressions.append(expr);
+        try self.expressions.append(self.allocator, expr);
     }
 
     pub fn render(self: Module, ui: *UiState) void {
@@ -192,7 +194,7 @@ pub const Expression = struct {
             .List => Expression {
                 .kind = kind,
                 .value = .{
-                    .list = ArrayList(Expression).init(allocator),
+                    .list = .empty,
                 },
                 .position = .{
                     .line = token.line,
@@ -202,7 +204,7 @@ pub const Expression = struct {
             .Set => Expression {
                 .kind = kind,
                 .value = .{
-                    .set = ArrayList(Expression).init(allocator),
+                    .set = .empty,
                 },
                 .position = .{
                     .line = token.line,
@@ -255,7 +257,7 @@ pub const Expression = struct {
             .Vector => Expression {
                 .kind = kind,
                 .value = .{
-                    .vector = ArrayList(Expression).init(allocator),
+                    .vector = .empty,
                 },
                 .position = .{
                     .line = token.line,
@@ -276,35 +278,35 @@ pub const Expression = struct {
         };
     }
 
-    pub fn deinit(self: *Expression) void {
+    pub fn deinit(self: *Expression, allocator: Allocator) void {
         switch (self.kind) {
             .List => {
                 for (self.value.list.items) |*expr| {
-                    expr.deinit();
+                    expr.deinit(allocator);
                 }
-                self.value.list.deinit();
+                self.value.list.deinit(allocator);
             },
             .Vector => {
                 for (self.value.vector.items) |*expr| {
-                    expr.deinit();
+                    expr.deinit(allocator);
                 }
-                self.value.vector.deinit();
+                self.value.vector.deinit(allocator);
             },
             .Map => {
                 var iter = self.value.map.iterator();
 
                 while (iter.next()) |item| {
-                    item.key_ptr.deinit();
-                    item.value_ptr.deinit();
+                    item.key_ptr.deinit(allocator);
+                    item.value_ptr.deinit(allocator);
                 }
 
                 self.value.map.deinit();
             },
             .Set => {
                 for (self.value.set.items) |*expr| {
-                    expr.deinit();
+                    expr.deinit(allocator);
                 }
-                self.value.set.deinit();
+                self.value.set.deinit(allocator);
             },
             else => {}, // Other types don't own memory
         }
@@ -394,10 +396,10 @@ pub const Parser = struct {
                                 }
                             },
                             .Vector => {
-                                var refer_list = ArrayList([]const u8).init(self.allocator);
+                                var refer_list:ArrayList([]const u8) = .empty;
                                 for (refer_expr.value.vector.items) |refer_item| {
-                                    refer_list.append(refer_item.value.symbol) catch {
-                                        refer_list.deinit();
+                                    refer_list.append(self.allocator, refer_item.value.symbol) catch {
+                                        refer_list.deinit(self.allocator);
                                         return null;
                                     };
                                 }
@@ -444,7 +446,7 @@ pub const Parser = struct {
             .position = expression.position,
         };
 
-        try module.functions.append(defn);
+        try module.functions.append(module.allocator, defn);
     }
 
     pub fn parse(self: *Parser, file_path: []const u8) !Module {
@@ -560,7 +562,7 @@ pub const Parser = struct {
     fn parseList(self: *Parser) ParseError!Expression {
         const left_paren = self.advance() orelse return ParseError.UnexpectedEOF;
         var list_expression = try Expression.create(self.allocator, .List, left_paren);
-        errdefer list_expression.deinit();
+        errdefer list_expression.deinit(self.allocator);
 
         while (self.peek()) |current_token| {
             switch (current_token.token) {
@@ -571,7 +573,7 @@ pub const Parser = struct {
                 .EOF => return ParseError.UnbalancedParentheses,
                 else => {
                     const expression = try self.parseExpression();
-                    try list_expression.value.list.append(expression);
+                    try list_expression.value.list.append(self.allocator, expression);
                 },
             }
         }
@@ -582,7 +584,7 @@ pub const Parser = struct {
     fn parseVector(self: *Parser) ParseError!Expression {
         const left_bracket = self.advance() orelse return ParseError.UnexpectedEOF;
         var vector_expression = try Expression.create(self.allocator, .Vector, left_bracket);
-        errdefer vector_expression.deinit();
+        errdefer vector_expression.deinit(self.allocator);
 
         while (self.peek()) |current_token| {
             switch (current_token.token) {
@@ -593,7 +595,7 @@ pub const Parser = struct {
                 .EOF => return ParseError.UnbalancedParentheses,
                 else => {
                     const expression = try self.parseExpression();
-                    try vector_expression.value.vector.append(expression);
+                    try vector_expression.value.vector.append(self.allocator, expression);
                 },
             }
         }
@@ -604,7 +606,7 @@ pub const Parser = struct {
     fn parseMap(self: *Parser) ParseError!Expression {
         const left_brace = self.advance() orelse return ParseError.UnexpectedEOF;
         var map_expression = try Expression.create(self.allocator, .Map, left_brace);
-        errdefer map_expression.deinit();
+        errdefer map_expression.deinit(self.allocator);
 
 
         var is_key = true;
@@ -646,7 +648,7 @@ pub const Parser = struct {
     fn parseSet(self: *Parser) ParseError!Expression {
         const set_start = self.advance() orelse return ParseError.UnexpectedEOF;
         var set_expression = try Expression.create(self.allocator, .Set, set_start);
-        errdefer set_expression.deinit();
+        errdefer set_expression.deinit(self.allocator);
 
         while (self.peek()) |current_token| {
             switch (current_token.token) {
@@ -657,7 +659,7 @@ pub const Parser = struct {
                 .EOF => return ParseError.UnbalancedBraces,
                 else => {
                     const expression = try self.parseExpression();
-                    try set_expression.value.set.append(expression);
+                    try set_expression.value.set.append(self.allocator, expression);
                 },
             }
         }

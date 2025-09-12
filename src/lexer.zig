@@ -41,24 +41,24 @@ pub const Lexer = struct {
     }
 
     pub fn getTokens(self: *Lexer) !ArrayList(TokenWithPosition)  {
-        var tokens = ArrayList(TokenWithPosition).init(self.allocator);
+        var tokens: ArrayList(TokenWithPosition) = .empty;
 
         while (self.nextToken()) |current_token| {
             if (current_token.token == .EOF) {
                 break;
             }
 
-            try tokens.append(current_token);
+            try tokens.append(self.allocator, current_token);
         } else |err| switch (err) {
             error.UnexpectedCharacter => {
-                tokens.deinit();
+                tokens.deinit(self.allocator);
                 if (!self.quiet) {
                     std.log.err("Unexpected character '{c}' at column {d} line {d}", .{self.source[self.cursor-1], self.column, self.line});
                 }
                 return err;
             },
             else => {
-                tokens.deinit();
+                tokens.deinit(self.allocator);
                 if (!self.quiet) {
                     std.log.err("Unhandle error parsing token '{c}' at column {d} line {d}", .{self.source[self.cursor], self.column, self.line});
                     std.log.err("Error: {any}", .{err});

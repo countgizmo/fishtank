@@ -1,9 +1,8 @@
 const std = @import("std");
 
-pub fn build(b: *std.Build) !void {
+pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
-
 
     const raylib_dep = b.dependency("raylib", .{
         .target = target,
@@ -12,13 +11,13 @@ pub fn build(b: *std.Build) !void {
 
     const exe = b.addExecutable(.{
         .name = "fishtank",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/main.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
     });
 
-    exe.root_module.source_file = b.path("src/main.zig");
-    exe.root_module.target = target;
-    exe.root_module.optimize = optimize;
-
-    exe.addIncludePath(b.path("libs/raylib/src"));
 
     b.installDirectory(.{
         .source_dir = b.path("resources"),
@@ -26,7 +25,8 @@ pub fn build(b: *std.Build) !void {
         .install_subdir = "resources",
     });
 
-    exe.linkLibrary(raylib_dep.artifact("raylib"));
+    exe.root_module.addIncludePath(b.path("libs/raylib/src"));
+    exe.root_module.linkLibrary(raylib_dep.artifact("raylib"));
+
     b.installArtifact(exe);
 }
-

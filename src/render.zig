@@ -1,7 +1,5 @@
 const std = @import("std");
-const rl = @cImport({
-    @cInclude("raylib.h");
-});
+const rl = @import("raylib.zig").rl;
 const Module = @import("parser.zig").Module;
 
 const WIDTH: f32 = 400;
