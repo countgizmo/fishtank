@@ -164,7 +164,7 @@ pub const Lexer = struct {
 
     fn isDelimiter(ch: u8) bool {
         switch (ch) {
-            ' ', ',', ';', '\n', '\r', '\t' => {return true;},
+            ' ', ',', '\n', '\r', '\t' => {return true;},
             else => {return false;},
         }
     }
@@ -182,6 +182,9 @@ pub const Lexer = struct {
             }
 
             switch (c) {
+                ';' => {
+                    return self.lexComment();
+                },
                 '(' => return self.makeToken(.LeftParen),
                 ')' => return self.makeToken(.RightParen),
                 '[' => return self.makeToken(.LeftBracket),
@@ -338,7 +341,7 @@ pub const Lexer = struct {
 
     fn isValidStringCharacter(ch: u8) bool {
         switch (ch) {
-            '(', ')', '[', ']', '{', '}' => return true,
+            '(', ')', '[', ']', '{', '}', '|' => return true,
             else => {
                 return isValidSymbolCharacter(ch) or isDelimiter(ch);
             }
@@ -382,6 +385,24 @@ pub const Lexer = struct {
             .column = start_column,
         };
     }
+
+    fn lexComment(self: *Lexer) TokenWithPosition {
+        const start = self.cursor-1;
+        const start_column = self.column;
+
+        while (self.cursor < self.source.len-1 and self.peek() != '\n') {
+            _ = self.advance();
+        }
+
+        const text = self.source[start..self.cursor];
+
+        return TokenWithPosition{
+            .token = Token{ .Comment = text },
+            .line = self.line,
+            .column = start_column,
+        };
+    }
+
 };
 
 test "init lexer" {
