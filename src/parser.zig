@@ -430,11 +430,24 @@ pub const Parser = struct {
     fn parseNs(self: Parser, module: *Module, expression: Expression) !void {
         module.name = expression.value.list.items[1].value.symbol;
 
+        // (ns something.core ... )
+        // 0 = ns
+        // 1 = namespace name
         if (expression.value.list.items.len > 2) {
-            const require = expression.value.list.items[2].value.list;
-            for (require.items) |item| {
-                if (self.parseRequiredLib(item)) |lib| {
-                    try module.addRequiredLib(lib);
+            for (expression.value.list.items) |item| {
+                switch (item.kind) {
+                    .String => {
+                        //TODO(evgheni): add docstring to the module
+                    },
+                    .List => {
+                        const require = item.value.list;
+                        for (require.items) |req_item| {
+                            if (self.parseRequiredLib(req_item)) |lib| {
+                                try module.addRequiredLib(lib);
+                            }
+                        }
+                    },
+                    else => {}
                 }
             }
         }
@@ -455,6 +468,7 @@ pub const Parser = struct {
         }
 
         var module = try Module.init(self.allocator, file_path);
+        errdefer module.deinit();
 
         while (self.peek()) |current_token | {
             switch (current_token.token) {
