@@ -37,11 +37,11 @@ pub const Project = struct {
     }
 
     pub fn analyze(self: *Project, folder_path: []const u8) !void {
+        std.log.debug("Analyzing folder: {s}", .{ folder_path });
         var dir = try std.fs.cwd().openDir(folder_path, .{ .iterate = true });
         defer dir.close();
 
         var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
-        errdefer self.deinit();
 
         var iterator = dir.iterate();
         while (try iterator.next()) |entry| {
@@ -53,19 +53,21 @@ pub const Project = struct {
                         std.mem.endsWith(u8, entry.name, ".cljc")) {
                         const contents = try self.getcontent(file_path);
 
-                        std.log.debug("Lexing file: {s}", .{entry.name});
+                        std.log.debug("Lexing file: {s}", .{file_path});
                         var lexer = Lexer.init(self.allocator, contents);
                         var tokens = try lexer.getTokens();
                         defer tokens.deinit(self.allocator);
 
-                        std.log.debug("Parsing file: {s}", .{entry.name});
+                        std.log.debug("Parsing file: {s}", .{file_path});
                         var parser = Parser.init(self.allocator, tokens.items);
                         const module = try parser.parse(file_path);
                         try self.modules.append(self.allocator, module);
                     }
                 },
                 .directory => {
-                    try self.analyze(file_path);
+                    self.analyze(file_path) catch |err| {
+                        std.log.warn("Skipping {s}: {}", .{file_path, err});
+                    };
                 },
                 else => {}
             }
