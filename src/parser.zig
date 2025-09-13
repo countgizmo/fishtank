@@ -455,7 +455,6 @@ pub const Parser = struct {
         }
 
         var module = try Module.init(self.allocator, file_path);
-        errdefer module.deinit();
 
         while (self.peek()) |current_token | {
             switch (current_token.token) {
