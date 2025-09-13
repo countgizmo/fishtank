@@ -40,6 +40,14 @@ pub const Lexer = struct {
         };
     }
 
+    fn printFailure(self: Lexer) void {
+        const range = 20;
+        const start_chunk = if (self.cursor - range >= 0) self.cursor - range else 0;
+        const end_chunk = if (self.cursor + range < self.source.len) self.cursor + range else self.source.len;
+        const chunk = self.source[start_chunk..end_chunk];
+        std.log.debug("\n>>>> {s} <<<<\n", .{ chunk });
+    }
+
     pub fn getTokens(self: *Lexer) !ArrayList(TokenWithPosition)  {
         var tokens: ArrayList(TokenWithPosition) = .empty;
 
@@ -60,6 +68,7 @@ pub const Lexer = struct {
             else => {
                 tokens.deinit(self.allocator);
                 if (!self.quiet) {
+                    self.printFailure();
                     std.log.err("Unhandle error parsing token '{c}' at column {d} line {d}", .{self.source[self.cursor], self.column, self.line});
                     std.log.err("Error: {any}", .{err});
                 }
