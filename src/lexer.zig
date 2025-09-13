@@ -187,6 +187,7 @@ pub const Lexer = struct {
                 '.' => return self.makeToken(.Dot),
                 '`' => return self.makeToken(.Backquote),
                 '~' => return self.makeToken(.Tilde),
+                '_' => return self.makeToken(.Underscore),
                 else => {
                     if (self.isSymbolBegins(c)) {
                         const maybe_symbol = try self.lexSymbolOrBuiltIn();

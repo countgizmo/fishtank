@@ -26,6 +26,7 @@ pub const Token = union(enum) {
     Dot,
     Backquote,
     Tilde,
+    Underscore,
 
     EOF,
 };
