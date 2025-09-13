@@ -617,6 +617,10 @@ pub const Parser = struct {
             switch (current_token.token) {
                 .RightBrace => {
                     if (key != null and value == null) {
+
+                        std.log.err("Uneven map items at line {} col {}",
+                        .{current_token.line, current_token.column});
+
                         return ParseError.UneventMapItems;
                     }
 
