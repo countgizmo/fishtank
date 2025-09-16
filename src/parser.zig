@@ -147,6 +147,7 @@ pub const Expression = struct {
 
     position: Position,
     quoted: bool = false,
+    ignored: bool = false,
 
     // fn hashExpression(expr: Expression) u64 {
     //     var hasher = std.hash.Wyhash.init(0);
@@ -494,6 +495,12 @@ pub const Parser = struct {
 
         // std.log.debug("Token = {any}\n", .{current_token});
         return switch (current_token.token) {
+            .Underscore => {
+                _ = self.advance();
+                var expr = try self.parseExpression();
+                expr.ignored = true;
+                return expr;
+            },
             .LeftParen => self.parseList(),
             .LeftBracket => self.parseVector(),
             .LeftBrace => self.parseMap(),
