@@ -174,10 +174,6 @@ pub const Lexer = struct {
             const c = self.advance();
 
             if (isDelimiter(c)) {
-                if (c == '\n') {
-                    self.line += 1;
-                    self.column = 0;
-                }
                 continue;
             }
 
@@ -236,8 +232,14 @@ pub const Lexer = struct {
 
     fn advance(self: *Lexer) u8 {
         const c = self.source[self.cursor];
+        if (c == '\n') {
+            self.line += 1;
+            self.column = 0;
+        } else {
+            self.column += 1;
+        }
+
         self.cursor += 1;
-        self.column += 1;
         return c;
     }
 
