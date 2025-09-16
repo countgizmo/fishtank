@@ -539,6 +539,13 @@ pub const Parser = struct {
                 return switch (next.token) {
                     .LeftBrace => self.parseSet(),
                     .LeftParen => self.parseList(),
+                    .Symbol => {
+                        if (std.mem.eql(u8, next.token.Symbol, "js")) {
+                            return try Expression.create(self.allocator, .Symbol, next);
+                        } else {
+                            return ParseError.UnexpectedToken;
+                        }
+                    },
                     else => {
                         if (pound_token) |the_pound_token| {
                             const skipped = self.advance();
