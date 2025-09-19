@@ -15,6 +15,7 @@ const LexerError = error {
     UnexpectedNumberCharacter,
     UnexpectedSymbolCharacter,
     UnexpectedEndOfString,
+    InvalidStartOfToken,
 };
 
 pub const Lexer = struct {
@@ -169,9 +170,26 @@ pub const Lexer = struct {
         }
     }
 
+    fn isInvalidStart(self: *Lexer, c: u8) bool {
+        switch (c) {
+            // standalone / is fine, so we check for delimiters after
+            '/' => {
+                const next = self.advance();
+                return !isDelimiter(next);
+            },
+            else => {
+                return false;
+            }
+        }
+    }
+
     pub fn nextToken(self: *Lexer) !TokenWithPosition {
         while (self.cursor < self.source.len) {
             const c = self.advance();
+
+            if (self.isInvalidStart(c)) {
+                return error.InvalidStartOfToken;
+            }
 
             if (isDelimiter(c)) {
                 continue;
@@ -195,7 +213,6 @@ pub const Lexer = struct {
                 '.' => return self.makeToken(.Dot),
                 '`' => return self.makeToken(.Backquote),
                 '~' => return self.makeToken(.Tilde),
-                '_' => return self.makeToken(.Underscore),
                 else => {
                     if (self.isSymbolBegins(c)) {
                         const maybe_symbol = try self.lexSymbolOrBuiltIn();
@@ -418,7 +435,7 @@ test "tokenize simple form" {
 
     var lexer = Lexer.init(std.testing.allocator, source);
     var tokens = try lexer.getTokens();
-    defer tokens.deinit();
+    defer tokens.deinit(std.testing.allocator);
 
     const expected_tokens = [_]TokenWithPosition {
         TokenWithPosition{ .token = .LeftParen, .column = 1, .line = 1 },
@@ -446,7 +463,7 @@ test "tokenize basic valid symbols" {
 
     var lexer = Lexer.init(std.testing.allocator, basic_symbols);
     var tokens = try lexer.getTokens();
-    defer tokens.deinit();
+    defer tokens.deinit(std.testing.allocator);
 
     const expected_tokens = [_]TokenWithPosition{
         TokenWithPosition{ .token = .{ .Symbol = "foo" }, .column = 1, .line = 1 },
@@ -481,7 +498,7 @@ test "tokenize valid symbols with special chars" {
 
     var lexer = Lexer.init(std.testing.allocator, valid_symbols);
     var tokens = try lexer.getTokens();
-    defer tokens.deinit();
+    defer tokens.deinit(std.testing.allocator);
 
     const expected_tokens = [_]TokenWithPosition{
         TokenWithPosition{ .token = .{ .Symbol = "foo.bar" }, .column = 1, .line = 1 },
@@ -512,7 +529,7 @@ test "tokenize valid namespaced symbols" {
 
     var lexer = Lexer.init(std.testing.allocator, valid_symbols);
     var tokens = try lexer.getTokens();
-    defer tokens.deinit();
+    defer tokens.deinit(std.testing.allocator);
 
     const expected_tokens = [_]TokenWithPosition{
         TokenWithPosition{ .token = .{ .Symbol = "my-namespace/foo" }, .column = 1, .line = 1 },
@@ -546,10 +563,10 @@ test "tokenize invalid symbols" {
     const invalid_symbols = [_]InvalidSymbolWithReason{
         .{ .symbol = "123abc", .expected_error = LexerError.UnexpectedNumberCharacter },
         .{ .symbol = "1name", .expected_error = LexerError.UnexpectedNumberCharacter },
-        .{ .symbol = "+1thing", .expected_error = LexerError.UnexpectedCharacter},
-        .{ .symbol = "-3value", .expected_error = LexerError.UnexpectedCharacter},
-        .{ .symbol = ".4symbol", .expected_error = LexerError.UnexpectedCharacter},
-        .{ .symbol = "/foo", .expected_error = LexerError.UnexpectedCharacter},
+        .{ .symbol = "+1thing", .expected_error = LexerError.UnexpectedNumberCharacter},
+        .{ .symbol = "-3value", .expected_error = LexerError.UnexpectedNumberCharacter},
+        .{ .symbol = ".4symbol", .expected_error = LexerError.UnexpectedNumberCharacter},
+        .{ .symbol = "/foo", .expected_error = LexerError.InvalidStartOfToken},
         .{ .symbol = "foo/", .expected_error = LexerError.UnexpectedSymbolCharacter},
         .{ .symbol = "ns/foo/bar", .expected_error = LexerError.UnexpectedSymbolCharacter},
         .{ .symbol = "foo@bar", .expected_error = LexerError.UnexpectedSymbolCharacter},
@@ -575,8 +592,8 @@ test "lexer - basic keywords" {
         .{ .token = .EOF, .column = 9, .line = 1 },
     };
 
-    const tokens = try l.getTokens();
-    defer tokens.deinit();
+    var tokens = try l.getTokens();
+    defer tokens.deinit(testing.allocator);
 
     for (tokens.items, 0..) |actual_token, idx| {
         switch (actual_token.token) {
@@ -599,8 +616,8 @@ test "lexer - namespaced keywords" {
         .{ .token = .EOF, .column = 21, .line = 1 },
     };
 
-    const tokens = try l.getTokens();
-    defer tokens.deinit();
+    var tokens = try l.getTokens();
+    defer tokens.deinit(testing.allocator);
 
     for (tokens.items, 0..) |actual_token, idx| {
         switch (actual_token.token) {
@@ -623,8 +640,8 @@ test "lexer - empty map" {
         .{ .token = .EOF, .column = 3, .line = 1 },
     };
 
-    const tokens = try l.getTokens();
-    defer tokens.deinit();
+    var tokens = try l.getTokens();
+    defer tokens.deinit(testing.allocator);
 
     for (tokens.items, 0..) |actual_token, idx| {
         try expectEqual(expected_tokens[idx], actual_token);
@@ -645,8 +662,8 @@ test "lexer - simple map" {
         .{ .token = .EOF, .column = 13, .line = 1 },
     };
 
-    const tokens = try l.getTokens();
-    defer tokens.deinit();
+    var tokens = try l.getTokens();
+    defer tokens.deinit(testing.allocator);
 
     for (tokens.items, 0..) |actual_token, idx| {
         switch (actual_token.token) {
@@ -683,8 +700,8 @@ test "lexer - nested map" {
         .{ .token = .EOF, .column = 28, .line = 1 },
     };
 
-    const tokens = try l.getTokens();
-    defer tokens.deinit();
+    var tokens = try l.getTokens();
+    defer tokens.deinit(testing.allocator);
 
     for (tokens.items, 0..) |actual_token, idx| {
         switch (actual_token.token) {
@@ -715,8 +732,8 @@ test "lexer - map with namespaced keys" {
         .{ .token = .EOF, .column = 31, .line = 1 },
     };
 
-    const tokens = try l.getTokens();
-    defer tokens.deinit();
+    var tokens = try l.getTokens();
+    defer tokens.deinit(testing.allocator);
 
     for (tokens.items, 0..) |actual_token, idx| {
         switch (actual_token.token) {
@@ -747,8 +764,8 @@ test "lexer - map with symbol keys" {
         .{ .token = .EOF, .column = 25, .line = 1 },
     };
 
-    const tokens = try l.getTokens();
-    defer tokens.deinit();
+    var tokens = try l.getTokens();
+    defer tokens.deinit(testing.allocator);
 
     for (tokens.items, 0..) |actual_token, idx| {
         switch (actual_token.token) {
@@ -822,8 +839,8 @@ test "lexer - string with escape sequences" {
         .{ .token = .EOF, .column = 26, .line = 1 },
     };
 
-    const tokens = try l.getTokens();
-    defer tokens.deinit();
+    var tokens = try l.getTokens();
+    defer tokens.deinit(testing.allocator);
 
     for (tokens.items, 0..) |actual_token, idx| {
         switch (actual_token.token) {
@@ -857,8 +874,8 @@ test "lexer - def with string" {
         .{ .token = .EOF, .column = 18, .line = 1 },
     };
 
-    const tokens = try l.getTokens();
-    defer tokens.deinit();
+    var tokens = try l.getTokens();
+    defer tokens.deinit(testing.allocator);
 
     for (tokens.items, 0..) |actual_token, idx| {
         switch (actual_token.token) {
@@ -882,7 +899,7 @@ test "lexer - line and column counting with different newlines" {
 
     var lexer = Lexer.init(testing.allocator, source);
     var tokens = try lexer.getTokens();
-    defer tokens.deinit();
+    defer tokens.deinit(testing.allocator);
 
     const expected_tokens = [_]TokenWithPosition{
         .{ .token = .{ .Symbol = "foo" }, .line = 1, .column = 1 },

@@ -316,6 +316,9 @@ pub const Expression = struct {
 };
 
 pub const ParseError = error{
+    NoTokens,
+    UnexpectedEndOfList,
+    UnexpectedEndOfVector,
     UnexpectedToken,
     UnexpectedEOF,
     UnbalancedParentheses,
@@ -466,7 +469,7 @@ pub const Parser = struct {
 
     pub fn parse(self: *Parser, file_path: []const u8) !Module {
         if (self.tokens.len == 0) {
-            return ParseError.UnexpectedEOF;
+            return ParseError.NoTokens;
         }
 
         var module = try Module.init(self.allocator, file_path);
@@ -496,12 +499,6 @@ pub const Parser = struct {
 
         // std.log.debug("Token = {any}\n", .{current_token});
         return switch (current_token.token) {
-            .Underscore => {
-                _ = self.advance();
-                var expr = try self.parseExpression();
-                expr.ignored = true;
-                return expr;
-            },
             .Tilde => {
                 _ = self.advance();
                 var expr = try self.parseExpression();
@@ -612,7 +609,7 @@ pub const Parser = struct {
             }
         }
 
-        return ParseError.UnexpectedEOF;
+        return ParseError.UnexpectedEndOfList;
     }
 
     fn parseVector(self: *Parser) ParseError!Expression {
@@ -620,6 +617,7 @@ pub const Parser = struct {
         var vector_expression = try Expression.create(self.allocator, .Vector, left_bracket);
         errdefer vector_expression.deinit(self.allocator);
 
+        const start_token = self.peek();
         while (self.peek()) |current_token| {
             switch (current_token.token) {
                 .RightBracket => {
@@ -634,7 +632,8 @@ pub const Parser = struct {
             }
         }
 
-        return ParseError.UnexpectedEOF;
+        std.log.debug("start token = {any} last token {any}", .{start_token, self.peek()});
+        return ParseError.UnexpectedEndOfVector;
     }
 
     fn parseMap(self: *Parser) ParseError!Expression {
@@ -654,6 +653,7 @@ pub const Parser = struct {
 
                         std.log.err("Uneven map items at line {} col {}",
                         .{current_token.line, current_token.column});
+                        std.log.debug("last key = {s} last val = {any}", .{key.?.value.symbol, value});
 
                         return ParseError.UneventMapItems;
                     }
