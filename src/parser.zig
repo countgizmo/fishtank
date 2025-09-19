@@ -320,6 +320,7 @@ pub const ParseError = error{
     UnexpectedEndOfList,
     UnexpectedEndOfVector,
     UnexpectedToken,
+    UnexpectedTokenAfterPound,
     UnexpectedEOF,
     UnbalancedParentheses,
     UnbalancedBraces,
@@ -497,7 +498,6 @@ pub const Parser = struct {
     fn parseExpression(self: *Parser) ParseError!Expression {
         const current_token = self.peek() orelse return ParseError.UnexpectedToken;
 
-        // std.log.debug("Token = {any}\n", .{current_token});
         return switch (current_token.token) {
             .Tilde => {
                 _ = self.advance();
@@ -508,61 +508,60 @@ pub const Parser = struct {
             .LeftParen => self.parseList(),
             .LeftBracket => self.parseVector(),
             .LeftBrace => self.parseMap(),
-            .String => blk: {
+            .String => {
                 _ = self.advance();
-                break :blk try Expression.create(self.allocator, .String, current_token);
+                return try Expression.create(self.allocator, .String, current_token);
             },
-            .Symbol => blk: {
+            .Symbol => {
                 _ = self.advance();
-                break :blk try Expression.create(self.allocator, .Symbol, current_token);
+                return try Expression.create(self.allocator, .Symbol, current_token);
             },
-            .Keyword => blk: {
+            .Keyword => {
                 _ = self.advance();
-                break :blk try Expression.create(self.allocator, .Keyword, current_token);
+                return try Expression.create(self.allocator, .Keyword, current_token);
             },
-            .Int => blk: {
+            .Int =>  {
                 _ = self.advance();
-                break :blk try Expression.create(self.allocator, .Int, current_token);
+                return try Expression.create(self.allocator, .Int, current_token);
             },
-            .Quote => blk: {
+            .Quote => {
                 _ = self.advance();
                 var expr = try self.parseExpression();
                 expr.quoted = true;
-                break :blk expr;
+                return expr;
             },
             .Pound => {
-                const pound_token = self.advance();
-                const next = self.peek() orelse return ParseError.UnexpectedEOF;
-                return switch (next.token) {
+                _ = self.advance();
+                const after_pound = self.peek() orelse return ParseError.UnexpectedEOF;
+                return switch (after_pound.token) {
                     .LeftBrace => self.parseSet(),
                     .LeftParen => self.parseList(),
                     .Symbol => {
-                        if (std.mem.eql(u8, next.token.Symbol, "js")) {
-                            return try Expression.create(self.allocator, .Symbol, next);
-                        } else {
-                            return ParseError.UnexpectedToken;
+                        if (std.mem.eql(u8, after_pound.token.Symbol, "js")) {
+                            _ = self.advance();
+                            return try Expression.create(self.allocator, .Symbol, after_pound);
+                        }else {
+                            std.log.err("Unhandle error parsing token after pound '{s}' at column {d} line {d}",
+                            .{after_pound.token.Symbol, after_pound.column, after_pound.line});
+                            return ParseError.UnexpectedTokenAfterPound;
                         }
                     },
                     else => {
-                        if (pound_token) |the_pound_token| {
-                            const skipped = self.advance();
-                            return Expression {
-                                .kind = .Unparsed,
-                                .value = .{
-                                    .unparsed = .{
-                                        .reason = "Unsupported # form",
-                                        .start_token = the_pound_token,
-                                        .skipped_token = skipped
-                                    }
-                                },
-                                .position = .{
-                                    .line = the_pound_token.line,
-                                    .column = the_pound_token.column,
-                                },
-                            };
-                        } else {
-                            return ParseError.UnexpectedToken;
-                        }
+                        const skipped = self.advance();
+                        return Expression {
+                            .kind = .Unparsed,
+                            .value = .{
+                                .unparsed = .{
+                                    .reason = "Unsupported # form",
+                                    .start_token = after_pound,
+                                    .skipped_token = skipped
+                                }
+                            },
+                            .position = .{
+                                .line = after_pound.line,
+                                .column = after_pound.column,
+                            },
+                        };
                     }
                 };
             },
@@ -962,7 +961,7 @@ test "parse a simple set" {
     defer module.deinit();
 
     const set_expr = module.expressions.items[0];
-    try testing.expectEqual(set_expr.kind, .Set);
+    try testing.expectEqual(.Set, set_expr.kind);
     try testing.expectEqual(3, set_expr.value.set.items.len);
 
     // Check that all keywords are in the set
@@ -1079,44 +1078,20 @@ test "parse ns with :refer [symbols]" {
     }
 }
 
-test "parse unsupported pound forms as unparsed" {
+ test "parse #js reader macro" {
     const tokens = [_]TokenWithPosition{
-        // (def x #_foo 42)  - testing discard form
-        .{ .token = .LeftParen, .line = 1, .column = 1 },
-        .{ .token = .{ .Symbol = "def" }, .line = 1, .column = 2 },
-        .{ .token = .{ .Symbol = "x" }, .line = 1, .column = 6 },
-        .{ .token = .Pound, .line = 1, .column = 8 },
-        .{ .token = .{ .Symbol = "_foo" }, .line = 1, .column = 9 },  // This would be parsed as discard
-        .{ .token = .{ .Int = 42 }, .line = 1, .column = 14 },
-        .{ .token = .RightParen, .line = 1, .column = 17 },
-        .{ .token = .EOF, .line = 1, .column = 18 },
+        .{ .token = .Pound, .line = 1, .column = 1 },
+        .{ .token = .{ .Symbol = "js" }, .line = 1, .column = 2 },
+        .{ .token = .EOF, .line = 1, .column = 4 },
     };
 
     var parser = Parser.init(testing.allocator, &tokens);
     var module = try parser.parse("test.clj");
     defer module.deinit();
 
-    // Should have parsed the def expression
     try testing.expectEqual(1, module.expressions.items.len);
 
-    const def_expr = module.expressions.items[0];
-    try testing.expectEqual(ExpressionKind.List, def_expr.kind);
-    try testing.expectEqual(4, def_expr.value.list.items.len);
-
-    // The third item should be our unparsed expression
-    const unparsed = def_expr.value.list.items[2];
-
-    // Testing reason
-    try testing.expectEqual(ExpressionKind.Unparsed, unparsed.kind);
-    try testing.expectEqualStrings("Unsupported # form", unparsed.value.unparsed.reason);
-
-    // Testing the start token (the one that we were parsing when we got the unparsed token)
-    try testing.expectEqual(.Pound, unparsed.value.unparsed.start_token.token);
-
-    // Testing the actual skipped token
-    try testing.expectEqualStrings("_foo", unparsed.value.unparsed.skipped_token.?.token.Symbol);
-
-    // The fourth item should be the 42
-    const num = def_expr.value.list.items[3];
-    try testing.expectEqual(42, num.value.int);
+    const expr = module.expressions.items[0];
+    try testing.expectEqual(ExpressionKind.Symbol, expr.kind);
+    try testing.expectEqualStrings("js", expr.value.symbol);
 }

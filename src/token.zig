@@ -22,11 +22,13 @@ pub const Token = union(enum) {
     Pound,
     At,
     Minus,
+    Plus,
     Slash,
     Carret,
     Dot,
     Backquote,
     Tilde,
+    Discard,
 
     EOF,
 };

@@ -103,7 +103,7 @@ pub const Lexer = struct {
     fn isSymbolBegins(self: Lexer, ch: u8) bool {
         // If -, + or . are the first character, the second character (if any) must be non-numeric.
         if ((ch == '-' or ch == '+' or ch == '.') ) {
-            if (std.ascii.isAlphabetic(self.peek()) or self.peek() == '>' or self.peek() == ' ') {
+            if (std.ascii.isAlphabetic(self.peek()) or self.peek() == '>') {
                 return true;
             } else {
                 return false;
@@ -170,12 +170,11 @@ pub const Lexer = struct {
         }
     }
 
-    fn isInvalidStart(self: *Lexer, c: u8) bool {
+    fn isInvalidStart(self: Lexer, c: u8) bool {
         switch (c) {
             // standalone / is fine, so we check for delimiters after
             '/' => {
-                const next = self.advance();
-                return !isDelimiter(next);
+                return !isDelimiter(self.peek());
             },
             else => {
                 return false;
@@ -187,12 +186,12 @@ pub const Lexer = struct {
         while (self.cursor < self.source.len) {
             const c = self.advance();
 
-            if (self.isInvalidStart(c)) {
-                return error.InvalidStartOfToken;
-            }
-
             if (isDelimiter(c)) {
                 continue;
+            }
+
+            if (self.isInvalidStart(c)) {
+                return error.InvalidStartOfToken;
             }
 
             switch (c) {
@@ -206,7 +205,13 @@ pub const Lexer = struct {
                 '{' => return self.makeToken(.LeftBrace),
                 '}' => return self.makeToken(.RightBrace),
                 '\'' => return self.makeToken(.Quote),
-                '#' => return self.makeToken(.Pound),
+                '#' => {
+                    if (self.peek() == '_') {
+                        _ = self.advance();
+                        return self.makeToken(.Discard);
+                    }
+                    return self.makeToken(.Pound);
+                },
                 '@' => return self.makeToken(.At),
                 '/' => return self.makeToken(.Slash),
                 '^' => return self.makeToken(.Carret),
@@ -231,9 +236,9 @@ pub const Lexer = struct {
                         const maybe_string = self.lexString();
                         return maybe_string;
                     } else if (c == '-') {
-                        if (!isDelimiter(self.peek())) {
-                            return self.makeToken(.Minus);
-                        }
+                        return self.makeToken(.Minus);
+                    } else if (c == '+') {
+                        return self.makeToken(.Plus);
                     } else {
                         return LexerError.UnexpectedCharacter;
                     }
@@ -334,8 +339,8 @@ pub const Lexer = struct {
             _ = self.advance();
         }
 
-        const next = self.peek();
-        if (!isDelimiter(next) and !isClosing(next)) {
+        const next_ch = self.peek();
+        if (!isDelimiter(next_ch) and !isClosing(next_ch)) {
             return LexerError.UnexpectedNumberCharacter;
         }
 
@@ -380,6 +385,9 @@ pub const Lexer = struct {
         // No -1 cause we exclude openning quote from the value
         const start = self.cursor;
         const start_column = self.column;
+        // String might contains \n, but we don't want to count those, so we remember
+        // the line where the string starts.
+        const start_line = self.line;
 
         while (self.cursor < self.source.len-1 and
                (isValidStringCharacter(self.peek()) or self.isEscapeSequence(self.peek()))) {
@@ -400,7 +408,7 @@ pub const Lexer = struct {
 
         return TokenWithPosition{
             .token = Token{ .String = text },
-            .line = self.line,
+            .line = start_line,
             .column = start_column,
         };
     }
@@ -836,7 +844,7 @@ test "lexer - string with escape sequences" {
 
     const expected_tokens = [_]TokenWithPosition{
         .{ .token = .{ .String = "hello\nworld\t\\slashed" }, .column = 1, .line = 1},
-        .{ .token = .EOF, .column = 26, .line = 1 },
+        .{ .token = .EOF, .column = 26, .line = 2 },
     };
 
     var tokens = try l.getTokens();
@@ -914,6 +922,68 @@ test "lexer - line and column counting with different newlines" {
             .Symbol => |value| {
                 try expectEqualStrings(expected_tokens[idx].token.Symbol, value);
                 try expectEqual(expected_tokens[idx].line, actual_token.line);
+                try expectEqual(expected_tokens[idx].column, actual_token.column);
+            },
+            else => try expectEqual(expected_tokens[idx], actual_token),
+        }
+    }
+}
+
+test "lexer - division with method call and arithmetic" {
+    const source = "(/ (- (.-width win) init/POPUP_WIDTH) 2)";
+    var lexer = Lexer.init(testing.allocator, source);
+    var tokens = try lexer.getTokens();
+    defer tokens.deinit(testing.allocator);
+
+    const expected_tokens = [_]TokenWithPosition{
+        .{ .token = .LeftParen, .line = 1, .column = 1 },
+        .{ .token = .Slash, .line = 1, .column = 2 },
+        .{ .token = .LeftParen, .line = 1, .column = 4 },
+        .{ .token = .Minus, .line = 1, .column = 5 },
+        .{ .token = .LeftParen, .line = 1, .column = 7 },
+        .{ .token = .Dot, .line = 1, .column = 8 },
+        .{ .token = .{ .Symbol = "-width" }, .line = 1, .column = 9 },
+        .{ .token = .{ .Symbol = "win" }, .line = 1, .column = 16 },
+        .{ .token = .RightParen, .line = 1, .column = 19 },
+        .{ .token = .{ .Symbol = "init/POPUP_WIDTH" }, .line = 1, .column = 21 },
+        .{ .token = .RightParen, .line = 1, .column = 37 },
+        .{ .token = .{ .Int = 2 }, .line = 1, .column = 39 },
+        .{ .token = .RightParen, .line = 1, .column = 40 },
+        .{ .token = .EOF, .line = 1, .column = 41 },
+    };
+
+    for (tokens.items, 0..) |actual_token, idx| {
+        switch (actual_token.token) {
+            .Symbol => |value| {
+                try expectEqualStrings(expected_tokens[idx].token.Symbol, value);
+                try expectEqual(expected_tokens[idx].column, actual_token.column);
+            },
+            .Int => |value| {
+                try expectEqual(expected_tokens[idx].token.Int, value);
+                try expectEqual(expected_tokens[idx].column, actual_token.column);
+            },
+            else => try expectEqual(expected_tokens[idx], actual_token),
+        }
+    }
+}
+
+test "lexer - double discard with string" {
+    const source = "#_#_\"?\"";
+    var lexer = Lexer.init(testing.allocator, source);
+    var tokens = try lexer.getTokens();
+    defer tokens.deinit(testing.allocator);
+
+    const expected_tokens = [_]TokenWithPosition{
+        .{ .token = .Discard, .line = 1, .column = 2 },  // #_ at column 1-2
+        .{ .token = .Discard, .line = 1, .column = 4 },  // #_ at column 3-4
+        .{ .token = .{ .String = "?" }, .line = 1, .column = 5 },  // "?" at column 5-7
+        .{ .token = .EOF, .line = 1, .column = 8 },
+    };
+
+    for (tokens.items, 0..) |actual_token, idx| {
+        switch (actual_token.token) {
+            .String => |value| {
+                try expectEqualStrings(expected_tokens[idx].token.String, value);
                 try expectEqual(expected_tokens[idx].column, actual_token.column);
             },
             else => try expectEqual(expected_tokens[idx], actual_token),
