@@ -458,8 +458,22 @@ pub const Parser = struct {
                 3 => {
                     const option = expression.value.vector.items[1].value.keyword;
                     if (std.mem.eql(u8, option, ":as")) {
+
+                        // The name can be a string or a symbol.
+                        //
+                        // Example:
+                        // (:require
+                        //  ["canvas-confetti" :as confetti]
+                        //  [reagent.core :as reagent])
+                        //
+                        const name = switch (expression.value.vector.items[0].kind) {
+                            .Symbol => expression.value.vector.items[0].value.symbol,
+                            .String => expression.value.vector.items[0].value.string,
+                            else => ""
+                        };
+
                         return RequiredLib {
-                            .name = expression.value.vector.items[0].value.symbol,
+                            .name = name,
                             .as = expression.value.vector.items[2].value.symbol,
                             .refer = null,
                         };
@@ -468,8 +482,14 @@ pub const Parser = struct {
                     if (std.mem.eql(u8, option, ":refer")) {
                         const refer_expr = expression.value.vector.items[2];
 
+                        const name = switch (expression.value.vector.items[0].kind) {
+                            .Symbol => expression.value.vector.items[0].value.symbol,
+                            .String => expression.value.vector.items[0].value.string,
+                            else => ""
+                        };
+
                         var req_lib = RequiredLib {
-                            .name = expression.value.vector.items[0].value.symbol,
+                            .name = name,
                             .as = null,
                             .refer = null,
                         };
