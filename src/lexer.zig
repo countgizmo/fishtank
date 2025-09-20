@@ -195,6 +195,9 @@ pub const Lexer = struct {
             }
 
             switch (c) {
+                '\\' => {
+                    return self.lexCharacter();
+                },
                 ';' => {
                     return self.lexComment();
                 },
@@ -417,7 +420,7 @@ pub const Lexer = struct {
         const start = self.cursor-1;
         const start_column = self.column;
 
-        while (self.cursor < self.source.len-1 and self.peek() != '\n') {
+        while (self.cursor < self.source.len and self.peek() != '\n') {
             _ = self.advance();
         }
 
@@ -425,6 +428,23 @@ pub const Lexer = struct {
 
         return TokenWithPosition{
             .token = Token{ .Comment = text },
+            .line = self.line,
+            .column = start_column,
+        };
+    }
+
+    fn lexCharacter(self: *Lexer) TokenWithPosition {
+        const start = self.cursor;
+        const start_column = self.column;
+
+        while (self.cursor < self.source.len and !isDelimiter(self.peek())) {
+            _ = self.advance();
+        }
+
+        const text = self.source[start..self.cursor];
+
+        return TokenWithPosition{
+            .token = Token{ .Character = text },
             .line = self.line,
             .column = start_column,
         };
@@ -984,6 +1004,34 @@ test "lexer - double discard with string" {
         switch (actual_token.token) {
             .String => |value| {
                 try expectEqualStrings(expected_tokens[idx].token.String, value);
+                try expectEqual(expected_tokens[idx].column, actual_token.column);
+            },
+            else => try expectEqual(expected_tokens[idx], actual_token),
+        }
+    }
+}
+
+test "lexer - character literals" {
+    const source = "\\a \\/ \\newline \\space \\tab \\return \\z";
+    var lexer = Lexer.init(testing.allocator, source);
+    var tokens = try lexer.getTokens();
+    defer tokens.deinit(testing.allocator);
+
+    const expected_tokens = [_]TokenWithPosition{
+        .{ .token = .{ .Character = "a" }, .line = 1, .column = 1 },
+        .{ .token = .{ .Character = "/" }, .line = 1, .column = 4 },
+        .{ .token = .{ .Character = "newline" }, .line = 1, .column = 7 },
+        .{ .token = .{ .Character = "space" }, .line = 1, .column = 16 },
+        .{ .token = .{ .Character = "tab" }, .line = 1, .column = 23 },
+        .{ .token = .{ .Character = "return" }, .line = 1, .column = 28 },
+        .{ .token = .{ .Character = "z" }, .line = 1, .column = 36 },
+        .{ .token = .EOF, .line = 1, .column = 38 },
+    };
+
+    for (tokens.items, 0..) |actual_token, idx| {
+        switch (actual_token.token) {
+            .Character => |ch| {
+                try expectEqualStrings(expected_tokens[idx].token.Character, ch);
                 try expectEqual(expected_tokens[idx].column, actual_token.column);
             },
             else => try expectEqual(expected_tokens[idx], actual_token),

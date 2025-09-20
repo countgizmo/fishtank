@@ -13,6 +13,7 @@ pub const Token = union(enum) {
     String: []const u8,
     Int: i64,
     Comment: []const u8,
+    Character: []const u8,
 
     // Built-ins
     Nil,
