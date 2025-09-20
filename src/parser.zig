@@ -181,17 +181,74 @@ pub const Expression = struct {
     //     return hasher.final();
     // }
 
+
+
     pub const HashContext = struct {
+        // pub fn hash(_: HashContext, e: Expression) u64 {
+        //     var hasher = std.hash.Wyhash.init(0);
+        //
+        //     switch (e.kind) {
+        //         .Float => {
+        //             const float_bits = @as(u64, @bitCast(e.value.float));
+        //             hasher.update(std.mem.asBytes(&float_bits));
+        //         },
+        //         else => std.hash.autoHashStrat(&hasher, &e, .Deep),
+        //     }
+        //     return hasher.final();
+        // }
+
         pub fn hash(_: HashContext, e: Expression) u64 {
             var hasher = std.hash.Wyhash.init(0);
 
+            // Hash the kind enum
+            hasher.update(std.mem.asBytes(&e.kind));
+
+            // Hash the value based on kind
             switch (e.kind) {
                 .Float => {
                     const float_bits = @as(u64, @bitCast(e.value.float));
                     hasher.update(std.mem.asBytes(&float_bits));
                 },
-                else => std.hash.autoHashStrat(&hasher, &e, .Deep),
+                .Symbol => hasher.update(e.value.symbol),
+                .Keyword => hasher.update(e.value.keyword),
+                .String => hasher.update(e.value.string),
+                .Int => hasher.update(std.mem.asBytes(&e.value.int)),
+                .List, .Vector, .Set => {
+                    // For collections, hash their contents
+                    const items = switch (e.kind) {
+                        .List => e.value.list.items,
+                        .Vector => e.value.vector.items,
+                        .Set => e.value.set.items,
+                        else => unreachable,
+                    };
+                    for (items) |item| {
+                        const item_hash = hash(.{}, item);
+                        hasher.update(std.mem.asBytes(&item_hash));
+                    }
+                },
+                .Map => {
+                    // For maps, we need to hash in a consistent order
+                    var iter = e.value.map.iterator();
+                    while (iter.next()) |entry| {
+                        const key_hash = hash(.{}, entry.key_ptr.*);
+                        const val_hash = hash(.{}, entry.value_ptr.*);
+                        hasher.update(std.mem.asBytes(&key_hash));
+                        hasher.update(std.mem.asBytes(&val_hash));
+                    }
+                },
+                .Unparsed => {
+                    hasher.update(e.value.unparsed.reason);
+                },
             }
+
+            // Hash position
+            hasher.update(std.mem.asBytes(&e.position));
+
+            // Hash flags
+            hasher.update(std.mem.asBytes(&e.quoted));
+            hasher.update(std.mem.asBytes(&e.deref));
+            hasher.update(std.mem.asBytes(&e.unquoted));
+
             return hasher.final();
         }
 
