@@ -365,17 +365,21 @@ pub const Lexer = struct {
         }
     }
 
+    // fn isValidStringCharacter(ch: u8) bool {
+    //     switch (ch) {
+    //         '(', ')', '[', ']', '{', '}', '|', '@', '', => return true,
+    //         else => {
+    //             return isValidSymbolCharacter(ch) or isDelimiter(ch);
+    //         }
+    //     }
+    //
+    //     return false;
+    // }
 
-    fn isValidStringCharacter(ch: u8) bool {
-        switch (ch) {
-            '(', ')', '[', ']', '{', '}', '|' => return true,
-            else => {
-                return isValidSymbolCharacter(ch) or isDelimiter(ch);
-            }
-        }
-
-        return false;
-    }
+    // fn isValidStringCharacter(self: Lexer, ch: u8) bool {
+    //     // String can contain anything except unescaped " or \
+    //     return ch != '"' and !self.isEscapeSequence(ch);
+    // }
 
     fn isEscapeSequence(self: Lexer, ch: u8) bool {
        if (self.cursor < self.source.len) {
@@ -392,8 +396,9 @@ pub const Lexer = struct {
         // the line where the string starts.
         const start_line = self.line;
 
+        // String can contain anything except unescaped " or \
         while (self.cursor < self.source.len-1 and
-               (isValidStringCharacter(self.peek()) or self.isEscapeSequence(self.peek()))) {
+               (self.peek() != '"' or self.isEscapeSequence(self.peek()))) {
             _ = self.advance();
         }
 
