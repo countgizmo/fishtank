@@ -147,7 +147,7 @@ pub const Expression = struct {
 
     position: Position,
     quoted: bool = false,
-    ignored: bool = false,
+    deref: bool = false,
     unquoted: bool = false,
 
     // fn hashExpression(expr: Expression) u64 {
@@ -503,6 +503,12 @@ pub const Parser = struct {
                 _ = self.advance();
                 var expr = try self.parseExpression();
                 expr.unquoted = true;
+                return expr;
+            },
+            .At => {
+                _ = self.advance();
+                var expr = try self.parseExpression();
+                expr.deref = true;
                 return expr;
             },
             .LeftParen => self.parseList(),
@@ -1094,4 +1100,72 @@ test "parse ns with :refer [symbols]" {
     const expr = module.expressions.items[0];
     try testing.expectEqual(ExpressionKind.Symbol, expr.kind);
     try testing.expectEqualStrings("js", expr.value.symbol);
+test "parse map with anonymous function in :on-click" {
+    // {:class "continue-btn"
+    //  :on-click #(continue-with-existing-connection!
+    //              {:!conn !conn
+    //               :validating? validating?
+    //               :error? error?
+    //               :next-step! next-step!
+    //               :!status !status})
+    //  :disabled @validating?}
+    const tokens = [_]TokenWithPosition{
+        .{ .token = .LeftBrace, .line = 1, .column = 1 },
+        .{ .token = .{ .Keyword = ":class" }, .line = 1, .column = 2 },
+        .{ .token = .{ .String = "continue-btn" }, .line = 1, .column = 9 },
+
+        .{ .token = .{ .Keyword = ":on-click" }, .line = 2, .column = 11 },
+        .{ .token = .Pound, .line = 2, .column = 21 },
+        .{ .token = .LeftParen, .line = 2, .column = 22 },
+        .{ .token = .{ .Symbol = "continue-with-existing-connection!" }, .line = 2, .column = 23 },
+
+        .{ .token = .LeftBrace, .line = 3, .column = 23 },
+        .{ .token = .{ .Keyword = ":!conn" }, .line = 3, .column = 24 },
+        .{ .token = .{ .Symbol = "!conn" }, .line = 3, .column = 31 },
+        .{ .token = .{ .Keyword = ":validating?" }, .line = 4, .column = 24 },
+        .{ .token = .{ .Symbol = "validating?" }, .line = 4, .column = 37 },
+        .{ .token = .{ .Keyword = ":error?" }, .line = 5, .column = 24 },
+        .{ .token = .{ .Symbol = "error?" }, .line = 5, .column = 32 },
+        .{ .token = .{ .Keyword = ":next-step!" }, .line = 6, .column = 24 },
+        .{ .token = .{ .Symbol = "next-step!" }, .line = 6, .column = 36 },
+        .{ .token = .{ .Keyword = ":!status" }, .line = 7, .column = 24 },
+        .{ .token = .{ .Symbol = "!status" }, .line = 7, .column = 33 },
+        .{ .token = .RightBrace, .line = 7, .column = 41 },
+
+        .{ .token = .RightParen, .line = 7, .column = 42 },
+
+        .{ .token = .{ .Keyword = ":disabled" }, .line = 8, .column = 11 },
+        .{ .token = .At, .line = 8, .column = 21 },
+        .{ .token = .{ .Symbol = "validating??" }, .line = 8, .column = 22 },
+
+        .{ .token = .RightBrace, .line = 8, .column = 34 },
+        .{ .token = .EOF, .line = 8, .column = 35 },
+    };
+
+    var parser = Parser.init(testing.allocator, &tokens);
+    var module = try parser.parse("test.clj");
+    defer module.deinit();
+
+    try testing.expectEqual(1, module.expressions.items.len);
+
+    const outer_map = module.expressions.items[0];
+    try testing.expectEqual(ExpressionKind.Map, outer_map.kind);
+    try testing.expectEqual(3, outer_map.value.map.count()); // :class, :on-click, :disabled
+}
+
+test "parse deref symbol with @" {
+    const tokens = [_]TokenWithPosition{
+        .{ .token = .At, .line = 1, .column = 1 },
+        .{ .token = .{ .Symbol = "validating?" }, .line = 1, .column = 2 },
+        .{ .token = .EOF, .line = 1, .column = 14 },
+    };
+
+    var parser = Parser.init(testing.allocator, &tokens);
+    var module = try parser.parse("test.clj");
+    defer module.deinit();
+
+    const expr = module.expressions.items[0];
+    try testing.expectEqual(ExpressionKind.Symbol, expr.kind);
+    try testing.expectEqualStrings("validating?", expr.value.symbol);
+    try testing.expectEqual(true, expr.deref);
 }
