@@ -545,7 +545,14 @@ pub const Parser = struct {
                     .Symbol => {
                         if (std.mem.eql(u8, after_pound.token.Symbol, "js")) {
                             _ = self.advance();
-                            return try Expression.create(self.allocator, .Symbol, after_pound);
+                            return Expression {
+                                .kind = .Symbol,
+                                .value = .{ .symbol = "#js" },
+                                .position = .{
+                                    .line = current_token.line,
+                                    .column = current_token.column,
+                                },
+                            };
                         }else {
                             std.log.err("Unhandle error parsing token after pound '{s}' at column {d} line {d}",
                             .{after_pound.token.Symbol, after_pound.column, after_pound.line});
@@ -641,6 +648,15 @@ pub const Parser = struct {
         return ParseError.UnexpectedEndOfVector;
     }
 
+    fn isPoundJS(exp: ?Expression) bool {
+        if (exp) |the_exp| {
+            if (the_exp.kind == .Symbol) {
+                return (std.mem.eql(u8, the_exp.value.symbol, "#js"));
+            }
+        }
+        return false;
+    }
+
     fn parseMap(self: *Parser) ParseError!Expression {
         const left_brace = self.advance() orelse return ParseError.UnexpectedEOF;
         var map_expression = try Expression.create(self.allocator, .Map, left_brace);
@@ -658,7 +674,11 @@ pub const Parser = struct {
 
                         std.log.err("Uneven map items at line {} col {}",
                         .{current_token.line, current_token.column});
-                        std.log.debug("last key = {s} last val = {any}", .{key.?.value.symbol, value});
+
+
+                        if (key.?.kind == .Symbol) {
+                            std.log.warn("last key = {s} last val = {any}", .{key.?.value.symbol, value});
+                        }
 
                         return ParseError.UneventMapItems;
                     }
@@ -670,8 +690,18 @@ pub const Parser = struct {
                 else => {
                     if (is_key) {
                         key = try self.parseExpression();
+                        if (isPoundJS(key)) {
+                            // Skipping #js
+                            key = null;
+                            continue;
+                        }
                     } else {
                         value = try self.parseExpression();
+                        if (isPoundJS(value)) {
+                            // Skipping #js
+                            value = null;
+                            continue;
+                        }
                     }
 
                     if (key != null and value != null) {
@@ -1099,7 +1129,40 @@ test "parse ns with :refer [symbols]" {
 
     const expr = module.expressions.items[0];
     try testing.expectEqual(ExpressionKind.Symbol, expr.kind);
-    try testing.expectEqualStrings("js", expr.value.symbol);
+    try testing.expectEqualStrings("#js", expr.value.symbol);
+}
+
+test "parse #js with nested map containing #js vector" {
+    // #js {:removeRuleIds #js [1]}
+    const tokens = [_]TokenWithPosition{
+        .{ .token = .Pound, .line = 1, .column = 1 },
+        .{ .token = .{ .Symbol = "js" }, .line = 1, .column = 2 },
+        .{ .token = .LeftBrace, .line = 1, .column = 5 },
+        .{ .token = .{ .Keyword = ":removeRuleIds" }, .line = 1, .column = 6 },
+        .{ .token = .Pound, .line = 1, .column = 21 },
+        .{ .token = .{ .Symbol = "js" }, .line = 1, .column = 22 },
+        .{ .token = .LeftBracket, .line = 1, .column = 25 },
+        .{ .token = .{ .Int = 1 }, .line = 1, .column = 26 },
+        .{ .token = .RightBracket, .line = 1, .column = 27 },
+        .{ .token = .RightBrace, .line = 1, .column = 28 },
+        .{ .token = .EOF, .line = 1, .column = 29 },
+    };
+
+    var parser = Parser.init(testing.allocator, &tokens);
+    var module = try parser.parse("test.clj");
+    defer module.deinit();
+
+    // Should have parsed the #js-tagged map
+    try testing.expectEqual(2, module.expressions.items.len);
+
+    const expr = module.expressions.items[0];
+    try testing.expectEqual(ExpressionKind.Symbol, expr.kind);
+    try testing.expectEqualStrings("#js", expr.value.symbol);
+
+    const map = module.expressions.items[1];
+    try testing.expectEqual(1, map.value.map.count());
+}
+
 test "parse map with anonymous function in :on-click" {
     // {:class "continue-btn"
     //  :on-click #(continue-with-existing-connection!
