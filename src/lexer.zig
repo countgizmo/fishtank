@@ -320,7 +320,7 @@ pub const Lexer = struct {
         const start = self.cursor - 1;
         const start_column = self.column;
 
-        while (self.cursor < self.source.len and isValidSymbolCharacter(self.source[self.cursor])) {
+        while (self.cursor < self.source.len and isValidSymbolCharacter(self.peek())) {
             _ = self.advance();
         }
 
@@ -333,12 +333,15 @@ pub const Lexer = struct {
         };
     }
 
-    // TODO(evheni): parse floats.
     fn lexNumber(self: *Lexer) !TokenWithPosition {
         const start = self.cursor - 1;
         const start_column = self.column;
+        var is_float = false;
 
-        while (self.cursor < self.source.len and std.ascii.isDigit(self.source[self.cursor])) {
+        while (self.cursor < self.source.len and (std.ascii.isDigit(self.peek()) or self.peek() == '.')) {
+            if (self.peek() == '.') {
+                is_float = true;
+            }
             _ = self.advance();
         }
 
@@ -348,12 +351,22 @@ pub const Lexer = struct {
         }
 
         const text = self.source[start..self.cursor];
-        const int = try std.fmt.parseInt(i64, text, 10);
-        return TokenWithPosition {
-            .token = Token{ .Int = int },
-            .line = self.line,
-            .column = start_column,
-        };
+
+        if (is_float) {
+            const float = try std.fmt.parseFloat(f64, text);
+            return TokenWithPosition {
+                .token = Token{ .Float = float},
+                .line = self.line,
+                .column = start_column,
+            };
+        } else {
+            const int = try std.fmt.parseInt(i64, text, 10);
+            return TokenWithPosition {
+                .token = Token{ .Int = int },
+                .line = self.line,
+                .column = start_column,
+            };
+        }
     }
 
     fn isValidEscape(ch: u8) bool {

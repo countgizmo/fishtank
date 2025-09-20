@@ -118,6 +118,7 @@ const ExpressionKind = enum {
     String,
     Symbol,
     Int,
+    Float,
     Keyword,
     Vector,
     Map,
@@ -133,6 +134,7 @@ pub const Expression = struct {
         list: ArrayList(Expression),
         symbol: []const u8,
         int: i64,
+        float: f64,
         keyword: []const u8,
         string: []const u8,
         vector: ArrayList(Expression),
@@ -182,11 +184,21 @@ pub const Expression = struct {
     pub const HashContext = struct {
         pub fn hash(_: HashContext, e: Expression) u64 {
             var hasher = std.hash.Wyhash.init(0);
-            std.hash.autoHashStrat(&hasher, &e, .Deep);
+
+            switch (e.kind) {
+                .Float => {
+                    const float_bits = @as(u64, @bitCast(e.value.float));
+                    hasher.update(std.mem.asBytes(&float_bits));
+                },
+                else => std.hash.autoHashStrat(&hasher, &e, .Deep),
+            }
             return hasher.final();
         }
 
         pub fn eql(_: HashContext, a: Expression, b: Expression) bool {
+            if (a.kind == .Float and b.kind == .Float) {
+                return a.value.float == b.value.float;
+            }
             return std.meta.eql(a, b);
         }
     };
@@ -250,6 +262,16 @@ pub const Expression = struct {
                 .kind = kind,
                 .value = .{
                     .int = token.token.Int,
+                },
+                .position = .{
+                    .line = token.line,
+                    .column = token.column,
+                },
+            },
+            .Float => Expression {
+                .kind = kind,
+                .value = .{
+                    .float = token.token.Float,
                 },
                 .position = .{
                     .line = token.line,

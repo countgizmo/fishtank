@@ -12,6 +12,7 @@ pub const Token = union(enum) {
     Keyword: []const u8,
     String: []const u8,
     Int: i64,
+    Float: f64,
     Comment: []const u8,
     Character: []const u8,
 
