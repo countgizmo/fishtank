@@ -116,6 +116,7 @@ pub const Module = struct {
 const ExpressionKind = enum {
     List,
     String,
+    Character,
     Symbol,
     Int,
     Float,
@@ -137,6 +138,7 @@ pub const Expression = struct {
         float: f64,
         keyword: []const u8,
         string: []const u8,
+        character: []const u8,
         vector: ArrayList(Expression),
         map: HashMap(Expression, Expression, Expression.HashContext, 80),
         set: ArrayList(Expression),
@@ -213,6 +215,7 @@ pub const Expression = struct {
                 .Symbol => hasher.update(e.value.symbol),
                 .Keyword => hasher.update(e.value.keyword),
                 .String => hasher.update(e.value.string),
+                .Character => hasher.update(e.value.character),
                 .Int => hasher.update(std.mem.asBytes(&e.value.int)),
                 .List, .Vector, .Set => {
                     // For collections, hash their contents
@@ -316,6 +319,16 @@ pub const Expression = struct {
                     .column = token.column,
                 },
             },
+            .Character => Expression {
+                .kind = kind,
+                .value = .{
+                    .character = token.token.Character,
+                },
+                .position = .{
+                    .line = token.line,
+                    .column = token.column,
+                },
+            },
             .Int => Expression {
                 .kind = kind,
                 .value = .{
@@ -404,6 +417,7 @@ pub const ParseError = error{
     NoTokens,
     UnexpectedEndOfList,
     UnexpectedEndOfVector,
+    UnexpectedEndOfMap,
     UnexpectedToken,
     UnexpectedTokenAfterPound,
     UnexpectedEOF,
@@ -623,6 +637,10 @@ pub const Parser = struct {
                 _ = self.advance();
                 return try Expression.create(self.allocator, .String, current_token);
             },
+            .Character => {
+                _ = self.advance();
+                return try Expression.create(self.allocator, .Character, current_token);
+            },
             .Symbol => {
                 _ = self.advance();
                 return try Expression.create(self.allocator, .Symbol, current_token);
@@ -834,7 +852,12 @@ pub const Parser = struct {
             }
         }
 
-        return ParseError.UnexpectedEOF;
+        // if (key.?.kind == .Symbol) {
+            std.log.warn("map so far = {any} ", .{map_expression});
+            std.log.warn("last token = {any} ", .{self.peek()});
+        // }
+
+        return ParseError.UnexpectedEndOfMap;
     }
 
     fn parseSet(self: *Parser) ParseError!Expression {
@@ -1350,4 +1373,36 @@ test "parse deref symbol with @" {
     try testing.expectEqual(ExpressionKind.Symbol, expr.kind);
     try testing.expectEqualStrings("validating?", expr.value.symbol);
     try testing.expectEqual(true, expr.deref);
+}
+
+test "parse map with character literal" {
+    // {:sep \tab}
+    const tokens = [_]TokenWithPosition{
+        .{ .token = .LeftBrace, .line = 1, .column = 1 },
+        .{ .token = .{ .Keyword = ":sep" }, .line = 1, .column = 2 },
+        .{ .token = .{ .Character = "tab" }, .line = 1, .column = 7 },
+        .{ .token = .RightBrace, .line = 1, .column = 11 },
+        .{ .token = .EOF, .line = 1, .column = 12 },
+    };
+
+    var parser = Parser.init(testing.allocator, &tokens);
+    var module = try parser.parse("test.clj");
+    defer module.deinit();
+
+    const map_expr = module.expressions.items[0];
+    try testing.expectEqual(ExpressionKind.Map, map_expr.kind);
+    try testing.expectEqual(1, map_expr.value.map.count());
+
+    const key = Expression {
+        .kind = .Keyword,
+        .value = .{ .keyword = ":sep" },
+        .position = .{ .line = 1, .column = 2 },
+    };
+
+    const value = map_expr.value.map.get(key);
+    try testing.expect(value != null);
+
+    try testing.expectEqual(ExpressionKind.Character, value.?.kind);
+    try testing.expectEqualStrings("tab", value.?.value.character);
+    try testing.expectEqual(7, value.?.position.column);
 }
