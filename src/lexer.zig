@@ -410,8 +410,10 @@ pub const Lexer = struct {
         const start_line = self.line;
 
         // String can contain anything except unescaped " or \
-        while (self.cursor < self.source.len-1 and
-               (self.peek() != '"' or self.isEscapeSequence(self.peek()))) {
+        while (self.cursor < self.source.len-1 and (self.peek() != '"')) {
+            if (self.isEscapeSequence(self.peek())) {
+                _ = self.advance();
+            }
             _ = self.advance();
         }
 
