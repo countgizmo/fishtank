@@ -785,6 +785,10 @@ pub const Parser = struct {
                     _ = self.advance();
                     return map_expression;
                 },
+                .Comment => {
+                    _ = self.advance();
+                    continue;
+                },
                 .EOF => return ParseError.UnclosedMap,
                 else => {
                     if (is_key) {
