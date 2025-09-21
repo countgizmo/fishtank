@@ -151,6 +151,7 @@ pub const Expression = struct {
     quoted: bool = false,
     deref: bool = false,
     unquoted: bool = false,
+    meta: ?*Expression = null,
 
     // fn hashExpression(expr: Expression) u64 {
     //     var hasher = std.hash.Wyhash.init(0);
@@ -360,6 +361,11 @@ pub const Expression = struct {
     }
 
     pub fn deinit(self: *Expression, allocator: Allocator) void {
+        if (self.meta) |meta| {
+            meta.deinit(allocator);
+            allocator.destroy(meta);
+        }
+
         switch (self.kind) {
             .List => {
                 for (self.value.list.items) |*expr| {
@@ -634,6 +640,16 @@ pub const Parser = struct {
                 var expr = try self.parseExpression();
                 expr.quoted = true;
                 return expr;
+            },
+            .Carret => {
+                // Consure the ^
+                _ = self.advance();
+                const meta = try self.parseExpression();
+                var expr = try self.parseExpression();
+                expr.meta = try self.allocator.create(Expression);
+                expr.meta.?.* = meta;
+                return expr;
+
             },
             .Pound => {
                 _ = self.advance();
