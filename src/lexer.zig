@@ -457,7 +457,9 @@ pub const Lexer = struct {
         const start = self.cursor;
         const start_column = self.column;
 
-        while (self.cursor < self.source.len and !isDelimiter(self.peek())) {
+        while (self.cursor < self.source.len
+               and !isDelimiter(self.peek())
+               and !isClosing(self.peek())) {
             _ = self.advance();
         }
 
@@ -1052,6 +1054,36 @@ test "lexer - character literals" {
         switch (actual_token.token) {
             .Character => |ch| {
                 try expectEqualStrings(expected_tokens[idx].token.Character, ch);
+                try expectEqual(expected_tokens[idx].column, actual_token.column);
+            },
+            else => try expectEqual(expected_tokens[idx], actual_token),
+        }
+    }
+}
+
+test "lexer - map with character literal" {
+    const source = "{:sep \\tab}";
+    var l = Lexer.init(testing.allocator, source);
+
+    const expected_tokens = [_]TokenWithPosition{
+        .{ .token = .LeftBrace, .column = 1, .line = 1 },
+        .{ .token = .{ .Keyword = ":sep" }, .column = 2, .line = 1 },
+        .{ .token = .{ .Character = "tab" }, .column = 7, .line = 1 },
+        .{ .token = .RightBrace, .column = 11, .line = 1 },
+        .{ .token = .EOF, .column = 12, .line = 1 },
+    };
+
+    var tokens = try l.getTokens();
+    defer tokens.deinit(testing.allocator);
+
+    for (tokens.items, 0..) |actual_token, idx| {
+        switch (actual_token.token) {
+            .Keyword => |value| {
+                try expectEqualStrings(expected_tokens[idx].token.Keyword, value);
+                try expectEqual(expected_tokens[idx].column, actual_token.column);
+            },
+            .Character => |value| {
+                try expectEqualStrings(expected_tokens[idx].token.Character, value);
                 try expectEqual(expected_tokens[idx].column, actual_token.column);
             },
             else => try expectEqual(expected_tokens[idx], actual_token),
