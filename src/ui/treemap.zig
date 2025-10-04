@@ -12,7 +12,7 @@ pub const TreemapItemContext = struct {
 pub const TreemapItem = struct {
     name: []const u8,
     weight: f32,
-    context: TreemapItemContext,
+    context: ?TreemapItemContext = null,
 };
 
 pub const SplitStrategy = enum {
@@ -60,6 +60,13 @@ pub fn render(ui: *UiState, window_width: i32, window_height: i32, items: []Tree
                 }
 
 
+                var buf: [255:0]u8 = undefined;
+                const weight_text = std.fmt.bufPrint(&buf, "w: {d}", .{item.weight}) catch "";
+
+                const w_x = @as(i32, @intFromFloat(current_x));
+                const w_y = @as(i32, @intFromFloat(current_y));
+                Components.label(ui, w_x + 5, w_y + 20, weight_text);
+
                 // Getting ready for the next item.
                 split = .vertical;
                 current_x += current_width;
@@ -79,6 +86,13 @@ pub fn render(ui: *UiState, window_width: i32, window_height: i32, items: []Tree
                 if (Components.treemapitem(ui, current_rect, item.name)) {
                     item_clicked = idx;
                 }
+
+                var buf: [255:0]u8 = undefined;
+                const weight_text = std.fmt.bufPrint(&buf, "w: {d}", .{item.weight}) catch "";
+
+                const w_x = @as(i32, @intFromFloat(current_x));
+                const w_y = @as(i32, @intFromFloat(current_y));
+                Components.label(ui, w_x + 5, w_y + 20, weight_text);
 
                 // Getting ready for the next item.
                 split = .horizontal;
@@ -103,11 +117,16 @@ pub fn render(ui: *UiState, window_width: i32, window_height: i32, items: []Tree
 
         Components.header(ui, header_x, header_y, "Functions:");
 
-        for (item.context.module.functions.items, 0..) |function, idx| {
-            const fn_item_count = 1 + @as(i32, @intCast(idx));
-            const label_x = header_x + 5;
-            const label_y = header_y + (24 * fn_item_count);
-            Components.label(ui, label_x, label_y, function.name);
+
+        // TODO(evgheni): this is modules specific, so should
+        // be moved out or something.
+        if (item.context) |context| {
+            for (context.module.functions.items, 0..) |function, idx| {
+                const fn_item_count = 1 + @as(i32, @intCast(idx));
+                const label_x = header_x + 5;
+                const label_y = header_y + (24 * fn_item_count);
+                Components.label(ui, label_x, label_y, function.name);
+            }
         }
     }
 }

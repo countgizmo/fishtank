@@ -67,13 +67,13 @@ pub fn main() !void {
     // try project.analyze("test_subjects/very_simple_project");
     // try project.analyze("/Users/ziggy/Projects/private/clojure/zots/src");
     //
-    // project.analyze("/Users/ziggy/Projects/humbleai/hai/main/projects/browser-extension/src/browser_ext") catch |err| {
-    project.analyze("/Users/ziggy/Projects/private/clojure/zots/src") catch |err| {
+    project.analyze("/Users/ziggy/Projects/humbleai/hai/main/projects/browser-extension/src/browser_ext") catch |err| {
+    // project.analyze("/Users/ziggy/Projects/private/clojure/zots/src") catch |err| {
         std.log.err("Analysis failed: {}", .{err});
         return err;
     };
 
-    const items = try project.getModuleAsTreemapItems();
+    const items = try project.getFoldersAsTreemapItems();
     defer allocator.free(items);
 
     while (!rl.WindowShouldClose()) {

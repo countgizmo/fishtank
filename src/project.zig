@@ -13,12 +13,14 @@ pub const Project = struct {
     allocator: Allocator,
     arena: std.heap.ArenaAllocator,
     modules: ArrayList(Module),
+    modules_by_folder: std.StringArrayHashMap(usize),
 
     pub fn init(allocator: Allocator) !Project {
         return Project {
             .allocator = allocator,
             .arena = std.heap.ArenaAllocator.init(allocator),
             .modules = .empty,
+            .modules_by_folder = std.StringArrayHashMap(usize).init(allocator),
         };
     }
 
@@ -28,6 +30,7 @@ pub const Project = struct {
             module.deinit();
         }
         self.modules.deinit(self.allocator);
+        self.modules_by_folder.deinit();
     }
 
     fn getcontent(self: *Project, file_path: []const u8) ![]u8 {
@@ -56,6 +59,25 @@ pub const Project = struct {
         return treeMapItems.toOwnedSlice(self.allocator);
     }
 
+
+    pub fn getFoldersAsTreemapItems(self: *Project) ![]TreemapItem {
+        var treeMapItems: ArrayList(TreemapItem) = .empty;
+        defer treeMapItems.deinit(self.allocator);
+
+        var iterator = self.modules_by_folder.iterator();
+        while (iterator.next()) |entry| {
+            std.log.debug("map key ={s} map value = {d}", .{entry.key_ptr.*, entry.value_ptr.*});
+            const mapitem = TreemapItem {
+                .name = entry.key_ptr.*,
+                .weight = @as(f32, @floatFromInt(entry.value_ptr.*)),
+            };
+            try treeMapItems.append(self.allocator, mapitem);
+        }
+
+        return treeMapItems.toOwnedSlice(self.allocator);
+    }
+
+
     pub fn analyze(self: *Project, folder_path: []const u8) !void {
         std.log.debug("Analyzing folder: {s}", .{ folder_path });
         var dir = try std.fs.cwd().openDir(folder_path, .{ .iterate = true });
@@ -71,14 +93,22 @@ pub const Project = struct {
                     if (std.mem.endsWith(u8, entry.name, ".clj") or
                         std.mem.endsWith(u8, entry.name, ".cljs") or
                         std.mem.endsWith(u8, entry.name, ".cljc")) {
+
+                        const folder_path_copy = try self.arena.allocator().dupe(u8, folder_path);
+                        if (self.modules_by_folder.get(folder_path_copy)) |current_modules_count| {
+                            try self.modules_by_folder.put(folder_path_copy, current_modules_count + 1);
+                        } else {
+                            try self.modules_by_folder.put(folder_path_copy, 0);
+                        }
+
                         const contents = try self.getcontent(file_path);
 
-                        std.log.debug("Lexing file: {s}", .{file_path});
+                        // std.log.debug("Lexing file: {s}", .{file_path});
                         var lexer = Lexer.init(self.allocator, contents);
                         var tokens = try lexer.getTokens();
                         defer tokens.deinit(self.allocator);
 
-                        std.log.debug("Parsing file: {s}", .{file_path});
+                        // std.log.debug("Parsing file: {s}", .{file_path});
                         var parser = Parser.init(self.allocator, tokens.items);
                         const module = try parser.parse(file_path);
                         try self.modules.append(self.allocator, module);
