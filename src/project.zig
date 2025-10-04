@@ -84,6 +84,8 @@ pub const Project = struct {
         defer dir.close();
 
         var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
+        const folder_path_copy = try self.arena.allocator().dupe(u8, folder_path);
+        try self.modules_by_folder.put(folder_path_copy, 0);
 
         var iterator = dir.iterate();
         while (try iterator.next()) |entry| {
@@ -94,11 +96,8 @@ pub const Project = struct {
                         std.mem.endsWith(u8, entry.name, ".cljs") or
                         std.mem.endsWith(u8, entry.name, ".cljc")) {
 
-                        const folder_path_copy = try self.arena.allocator().dupe(u8, folder_path);
                         if (self.modules_by_folder.get(folder_path_copy)) |current_modules_count| {
                             try self.modules_by_folder.put(folder_path_copy, current_modules_count + 1);
-                        } else {
-                            try self.modules_by_folder.put(folder_path_copy, 0);
                         }
 
                         const contents = try self.getcontent(file_path);
