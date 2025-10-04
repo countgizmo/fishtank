@@ -13,8 +13,7 @@ const Primitives = @import("ui/primitives.zig");
 const Components = @import("ui/components.zig");
 const UiState = @import("ui/state.zig").UiState;
 const Project = @import("project.zig").Project;
-const treemap = @import("ui/treemap.zig");
-const TreemapItem = treemap.TreemapItem;
+const Treemap = @import("ui/treemap.zig");
 
 fn getFontPath(allocator: Allocator) ![:0]u8 {
     const exe_path = try std.fs.selfExeDirPathAlloc(allocator);
@@ -46,8 +45,9 @@ pub fn main() !void {
         if (status != .ok) @panic("Memory leak detected!");
     }
 
-    const font_path = try getFontPath(gpa.allocator());
-    defer gpa.allocator().free(font_path);
+    const allocator = gpa.allocator();
+    const font_path = try getFontPath(allocator);
+    defer allocator.free(font_path);
 
     var ui = UiState{
         .text_config = .{
@@ -57,29 +57,24 @@ pub fn main() !void {
             .font_size = Primitives.normal_font_size,
         },
     };
-
     defer rl.UnloadFont(ui.text_config.font);
+
 
     rl.SetTextureFilter(ui.text_config.font.texture, rl.TEXTURE_FILTER_BILINEAR);
 
-    var project = try Project.init(gpa.allocator());
-    // try project.analyze("test_subjects/very_simple_project");
-    try project.analyze("/Users/ziggy/Projects/private/clojure/zots/src");
+    var project = try Project.init(allocator);
     defer project.deinit();
+    // try project.analyze("test_subjects/very_simple_project");
+    // try project.analyze("/Users/ziggy/Projects/private/clojure/zots/src");
+    //
+    // project.analyze("/Users/ziggy/Projects/humbleai/hai/main/projects/browser-extension/src/browser_ext") catch |err| {
+    project.analyze("/Users/ziggy/Projects/private/clojure/zots/src") catch |err| {
+        std.log.err("Analysis failed: {}", .{err});
+        return err;
+    };
 
-    var treeMapItems: ArrayList(TreemapItem) = .empty;
-    defer treeMapItems.deinit(gpa.allocator());
-
-    for (project.modules.items) |*project_module| {
-        const mapitem = TreemapItem {
-            .name = project_module.name,
-            .weight = @as(f32, @floatFromInt(project_module.functions.items.len)),
-            .context = .{
-                .module = project_module,
-            },
-        };
-        try treeMapItems.append(gpa.allocator(), mapitem);
-    }
+    const items = try project.getModuleAsTreemapItems();
+    defer allocator.free(items);
 
     while (!rl.WindowShouldClose()) {
         rl.BeginDrawing();
@@ -87,7 +82,7 @@ pub fn main() !void {
 
         Components.screen(ui, 800, 600);
         // project.render(&ui);
-        treemap.render(&ui, width, height, treeMapItems.items);
+        Treemap.render(&ui, width, height, items);
 
         rl.EndDrawing();
     }

@@ -6,6 +6,8 @@ const Parser = @import("parser.zig").Parser;
 const Lexer = @import("lexer.zig").Lexer;
 const Components = @import("ui/components.zig");
 const UiState = @import("ui/state.zig").UiState;
+const Treemap = @import("ui/treemap.zig");
+const TreemapItem = Treemap.TreemapItem;
 
 pub const Project = struct {
     allocator: Allocator,
@@ -34,6 +36,24 @@ pub const Project = struct {
             file_path,
             1024 * 1024 * 10,
         );
+    }
+
+    pub fn getModuleAsTreemapItems(self: *Project) ![]TreemapItem {
+        var treeMapItems: ArrayList(TreemapItem) = .empty;
+        defer treeMapItems.deinit(self.allocator);
+
+        for (self.modules.items) |*project_module| {
+            const mapitem = TreemapItem {
+                .name = project_module.name,
+                .weight = @as(f32, @floatFromInt(project_module.functions.items.len)),
+                .context = .{
+                    .module = project_module,
+                },
+            };
+            try treeMapItems.append(self.allocator, mapitem);
+        }
+
+        return treeMapItems.toOwnedSlice(self.allocator);
     }
 
     pub fn analyze(self: *Project, folder_path: []const u8) !void {
