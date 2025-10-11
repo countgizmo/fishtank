@@ -38,12 +38,10 @@ pub const Treemap = struct {
             total += item.weight;
         }
 
-        const rows = try calculateRows(allocator, sorted_items, total, 768);
-
         return Treemap{
-            .items = items,
+            .items = sorted_items,
             .total_weight = total,
-            .rows = rows,
+            .rows = try calculateRows(allocator, sorted_items, total, 768),
             .allocator = allocator
         };
     }
