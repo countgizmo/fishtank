@@ -13,7 +13,7 @@ const Primitives = @import("ui/primitives.zig");
 const Components = @import("ui/components.zig");
 const UiState = @import("ui/state.zig").UiState;
 const Project = @import("project.zig").Project;
-const Treemap = @import("ui/treemap.zig");
+const Treemap = @import("ui/treemap.zig").Treemap;
 
 fn getFontPath(allocator: Allocator) ![:0]u8 {
     const exe_path = try std.fs.selfExeDirPathAlloc(allocator);
@@ -50,6 +50,8 @@ pub fn main() !void {
     defer allocator.free(font_path);
 
     var ui = UiState{
+        .container_width = width,
+        .container_height = height,
         .text_config = .{
             .font = rl.LoadFont(font_path.ptr)
         },
@@ -67,14 +69,17 @@ pub fn main() !void {
     // try project.analyze("test_subjects/very_simple_project");
     // try project.analyze("/Users/ziggy/Projects/private/clojure/zots/src");
     //
-    project.analyze("/Users/ziggy/Projects/humbleai/hai/main/projects/browser-extension/src/browser_ext") catch |err| {
-    // project.analyze("/Users/ziggy/Projects/private/clojure/zots/src") catch |err| {
+    // project.analyze("/Users/ziggy/Projects/humbleai/hai/main/projects/browser-extension/src/browser_ext") catch |err| {
+    project.analyze("/Users/ziggy/Projects/private/clojure/zots/src") catch |err| {
         std.log.err("Analysis failed: {}", .{err});
         return err;
     };
 
-    const items = try project.getFoldersAsTreemapItems();
+    const items = try project.getModuleAsTreemapItems();
     defer allocator.free(items);
+
+    var treemap = try Treemap.init(allocator, items);
+    defer treemap.deinit();
 
     while (!rl.WindowShouldClose()) {
         rl.BeginDrawing();
@@ -82,7 +87,7 @@ pub fn main() !void {
 
         Components.screen(ui, 800, 600);
         // project.render(&ui);
-        Treemap.render(&ui, width, height, items);
+        treemap.render(&ui);
 
         rl.EndDrawing();
     }

@@ -15,5 +15,7 @@ pub const UiState = struct{
     margin: i32 = 10,
     next_x: i32 = 0,
     next_y: i32 = 0,
+    container_width: f32 = 0,
+    container_height: f32 = 0,
 };
 

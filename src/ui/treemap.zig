@@ -1,4 +1,5 @@
 const std = @import("std");
+const Allocator = std.mem.Allocator;
 const UiState = @import("state.zig").UiState;
 const primitives = @import("primitives.zig");
 const Components = @import("components.zig");
@@ -15,118 +16,77 @@ pub const TreemapItem = struct {
     context: ?TreemapItemContext = null,
 };
 
-pub const SplitStrategy = enum {
-    horizontal,
-    vertical
+pub const TreemapRow = struct {
+    weight: f32,
+    height: f32,
+    start_index: usize,
+    count: usize
 };
 
-fn compareByWeight(_: void, a: TreemapItem, b: TreemapItem) bool {
-    return a.weight > b.weight;
-}
+pub const Treemap = struct {
+    items: []TreemapItem,
+    rows: []TreemapRow,
+    total_weight: f32 = 0,
+    allocator: Allocator,
 
-pub fn render(ui: *UiState, window_width: i32, window_height: i32, items: []TreemapItem) void {
-    var split: SplitStrategy = .horizontal;
+    pub fn init(allocator: Allocator, items: []TreemapItem) !Treemap {
+        const sorted_items = try allocator.dupe(TreemapItem, items);
+        std.mem.sort(TreemapItem, sorted_items, {}, compareByWeight);
 
-    std.mem.sort(TreemapItem, items, {}, compareByWeight);
-
-    var total_weight: f32 = 0;
-    for (items) |item| {
-        total_weight += item.weight;
-    }
-
-
-    var current_x: f32 = 0;
-    var current_y: f32 = 0;
-
-    var container_width = @as(f32, @floatFromInt(window_width));
-    var container_height = @as(f32, @floatFromInt(window_height));
-
-    var item_clicked: ?usize = null;
-
-    for (items, 0..) |item, idx| {
-        switch (split) {
-            .horizontal => {
-                const current_width = container_width / total_weight * item.weight;
-
-                const current_rect = primitives.Rect {
-                    .height = container_height,
-                    .width = current_width,
-                    .x = current_x,
-                    .y = current_y,
-                };
-
-                if (Components.treemapitem(ui, current_rect, item.name)) {
-                    item_clicked = idx;
-                }
-
-
-                var buf: [255:0]u8 = undefined;
-                const weight_text = std.fmt.bufPrint(&buf, "w: {d}", .{item.weight}) catch "";
-
-                const w_x = @as(i32, @intFromFloat(current_x));
-                const w_y = @as(i32, @intFromFloat(current_y));
-                Components.label(ui, w_x + 5, w_y + 20, weight_text);
-
-                // Getting ready for the next item.
-                split = .vertical;
-                current_x += current_width;
-                container_width = container_width - current_width;
-                total_weight -= item.weight;
-            },
-            .vertical => {
-                const current_height = container_height / total_weight * item.weight;
-
-                const current_rect = primitives.Rect {
-                    .height = current_height,
-                    .width = container_width,
-                    .x = current_x,
-                    .y = current_y,
-                };
-
-                if (Components.treemapitem(ui, current_rect, item.name)) {
-                    item_clicked = idx;
-                }
-
-                var buf: [255:0]u8 = undefined;
-                const weight_text = std.fmt.bufPrint(&buf, "w: {d}", .{item.weight}) catch "";
-
-                const w_x = @as(i32, @intFromFloat(current_x));
-                const w_y = @as(i32, @intFromFloat(current_y));
-                Components.label(ui, w_x + 5, w_y + 20, weight_text);
-
-                // Getting ready for the next item.
-                split = .horizontal;
-                current_y += current_height;
-                container_height = container_height - current_height;
-                total_weight -= item.weight;
-            },
+        var total: f32 = 0;
+        for (sorted_items) |item| {
+            total += item.weight;
         }
+
+        const rows = try calculateRows(allocator, sorted_items, total, 768);
+
+        return Treemap{
+            .items = items,
+            .total_weight = total,
+            .rows = rows,
+            .allocator = allocator
+        };
     }
 
-    if (item_clicked) |clicked_idx| {
-        const item = items[clicked_idx];
-        std.log.debug("Clicked {s}", .{ item.name });
-        const mouse = rl.GetMousePosition();
-        Components.modal(ui, mouse.x, mouse.y);
+    fn compareByWeight(_: void, a: TreemapItem, b: TreemapItem) bool {
+        return a.weight > b.weight;
+    }
 
-        const start_x = @as(i32, @intFromFloat(mouse.x));
-        const start_y = @as(i32, @intFromFloat(mouse.y));
+    fn calculateRows(allocator: Allocator, items: []TreemapItem, total_weight: f32,  height: f32) ![]TreemapRow {
+        var rows = try allocator.alloc(TreemapRow, 1);
+        rows[0] = TreemapRow {
+            .weight = total_weight,
+            .height = height,
+            .start_index = 0,
+            .count = items.len,
 
-        const header_x = start_x + 5;
-        const header_y = start_y + 10;
+        };
 
-        Components.header(ui, header_x, header_y, "Functions:");
+        return rows;
+    }
 
+    pub fn deinit(self: *Treemap) void {
+        self.allocator.free(self.items);
+        self.allocator.free(self.rows);
+    }
 
-        // TODO(evgheni): this is modules specific, so should
-        // be moved out or something.
-        if (item.context) |context| {
-            for (context.module.functions.items, 0..) |function, idx| {
-                const fn_item_count = 1 + @as(i32, @intCast(idx));
-                const label_x = header_x + 5;
-                const label_y = header_y + (24 * fn_item_count);
-                Components.label(ui, label_x, label_y, function.name);
+    pub fn render(self: Treemap, ui: *UiState) void {
+        for (self.rows) |row| {
+            const row_items = self.items[row.start_index..row.start_index + row.count];
+            var x: f32 = 0;
+            for (row_items) |item| {
+                const width = (item.weight / row.weight) * ui.container_width;
+                const rect = primitives.Rect {
+                    .x = x,
+                    .y = 0,
+                    .width = width,
+                    .height = row.height,
+
+                };
+                _ = Components.treemapitem(ui, rect, item.name);
+                x += width;
             }
         }
     }
-}
+};
+
