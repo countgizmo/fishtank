@@ -94,6 +94,8 @@ pub fn modal(ui: *UiState, x: f32, y: f32) void {
 }
 
 pub fn treemapitem(ui: *UiState, rect: Primitives.Rect, text: []const u8) bool {
+    ui.active_text_style.font_size = Primitives.small_font_size;
+
     const widget = Primitives.Widget{
         .rect = rect,
         .flags = .{

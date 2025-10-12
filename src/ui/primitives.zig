@@ -54,6 +54,7 @@ pub const border_width = 2;
 pub const screen_padding = 2;
 pub const big_font_size = 22;
 pub const normal_font_size = 18;
+pub const small_font_size = 14;
 pub const text_padding = 5;
 
 pub fn render_widget(ui: UiState, widget: Widget) void {

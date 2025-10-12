@@ -162,12 +162,6 @@ pub const Treemap = struct {
                 };
                 _ = Components.treemapitem(ui, rect, item.name);
 
-                var buf: [255:0]u8 = undefined;
-                const weight_text = std.fmt.bufPrint(&buf, "w: {d}", .{item.weight}) catch "";
-
-                const w_x = @as(i32, @intFromFloat(x));
-                const w_y = @as(i32, @intFromFloat(y));
-                Components.label(ui, w_x + 5, w_y + 20, weight_text);
                 x += width;
 
             }

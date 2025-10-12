@@ -30,7 +30,7 @@ fn getFontPath(allocator: Allocator) ![:0]u8 {
 }
 
 pub const width = 1200;
-pub const height = 800;
+pub const height = 900;
 
 pub fn main() !void {
     rl.SetConfigFlags(rl.FLAG_WINDOW_HIGHDPI);
@@ -50,8 +50,8 @@ pub fn main() !void {
     defer allocator.free(font_path);
 
     var ui = UiState{
-        .container_width = width, //@as(f32, @floatFromInt(rl.GetRenderWidth())),
-        .container_height = height, //@as(f32, @floatFromInt(rl.GetRenderHeight())),
+        .container_width = width - Primitives.screen_padding,
+        .container_height = height - Primitives.screen_padding,
         .text_config = .{
             .font = rl.LoadFont(font_path.ptr)
         },
