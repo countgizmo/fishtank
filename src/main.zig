@@ -29,11 +29,11 @@ fn getFontPath(allocator: Allocator) ![:0]u8 {
     return allocator.dupeZ(u8, path);
 }
 
-pub const width = 1024;
-pub const height = 768;
+pub const width = 1200;
+pub const height = 800;
 
 pub fn main() !void {
-    rl.SetConfigFlags(rl.FLAG_WINDOW_HIGHDPI);
+    rl.SetConfigFlags(rl.FLAG_WINDOW_HIGHDPI | rl.FLAG_WINDOW_RESIZABLE);
     rl.InitWindow(width, height, "Fishtank");
     defer rl.CloseWindow();
     rl.SetTargetFPS(30);
@@ -78,14 +78,18 @@ pub fn main() !void {
     const items = try project.getModuleAsTreemapItems();
     defer allocator.free(items);
 
-    var treemap = try Treemap.init(allocator, items);
+    var treemap = try Treemap.init(allocator, items, ui);
     defer treemap.deinit();
 
     while (!rl.WindowShouldClose()) {
         rl.BeginDrawing();
         rl.ClearBackground(Primitives.bg_color);
 
-        Components.screen(ui, 800, 600);
+        if (rl.IsWindowResized()) {
+            ui.container_height = @as(f32, @floatFromInt(rl.GetRenderHeight()));
+            ui.container_width = @as(f32, @floatFromInt(rl.GetRenderWidth()));
+            try treemap.recalculate(ui);
+        }
         // project.render(&ui);
         treemap.render(&ui);
 
