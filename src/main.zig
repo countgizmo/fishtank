@@ -33,7 +33,7 @@ pub const width = 1200;
 pub const height = 800;
 
 pub fn main() !void {
-    rl.SetConfigFlags(rl.FLAG_WINDOW_HIGHDPI | rl.FLAG_WINDOW_RESIZABLE);
+    rl.SetConfigFlags(rl.FLAG_WINDOW_HIGHDPI);
     rl.InitWindow(width, height, "Fishtank");
     defer rl.CloseWindow();
     rl.SetTargetFPS(30);
@@ -50,8 +50,8 @@ pub fn main() !void {
     defer allocator.free(font_path);
 
     var ui = UiState{
-        .container_width = width,
-        .container_height = height,
+        .container_width = width, //@as(f32, @floatFromInt(rl.GetRenderWidth())),
+        .container_height = height, //@as(f32, @floatFromInt(rl.GetRenderHeight())),
         .text_config = .{
             .font = rl.LoadFont(font_path.ptr)
         },
@@ -81,15 +81,24 @@ pub fn main() !void {
     var treemap = try Treemap.init(allocator, items, ui);
     defer treemap.deinit();
 
+    std.log.debug("Container: {}x{}", .{ui.container_width, ui.container_height});
+
+    // After calculateRows, check if rows actually fit:
+    var total_row_height: f32 = 0;
+    for (treemap.rows) |row| {
+        total_row_height += row.height;
+    }
+    std.log.debug("Total row height: {} (should be {})", .{total_row_height, ui.container_height});
+
     while (!rl.WindowShouldClose()) {
         rl.BeginDrawing();
         rl.ClearBackground(Primitives.bg_color);
 
-        if (rl.IsWindowResized()) {
-            ui.container_height = @as(f32, @floatFromInt(rl.GetRenderHeight()));
-            ui.container_width = @as(f32, @floatFromInt(rl.GetRenderWidth()));
-            try treemap.recalculate(ui);
-        }
+        // if (rl.IsWindowResized()) {
+        //     ui.container_height = @as(f32, @floatFromInt(rl.GetRenderHeight()));
+        //     ui.container_width = @as(f32, @floatFromInt(rl.GetRenderWidth()));
+        //     try treemap.recalculate(ui);
+        // }
         // project.render(&ui);
         treemap.render(&ui);
 

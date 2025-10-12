@@ -67,10 +67,10 @@ pub fn render_widget(ui: UiState, widget: Widget) void {
 
     if (widget.flags.has_border) {
         const border_rect = rl.Rectangle{
-            .x = widget.rect.x,
-            .y = widget.rect.y,
-            .width = widget.rect.width,
-            .height = widget.rect.height,
+            .x = widget.rect.x + border_width/2,
+            .y = widget.rect.y + border_width/2,
+            .width = widget.rect.width - border_width,
+            .height = widget.rect.height - border_width,
         };
 
         var border_color = text_color;

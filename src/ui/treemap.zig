@@ -126,7 +126,17 @@ pub const Treemap = struct {
             try rows.append(allocator, current_row);
         }
 
-        std.log.debug("Rows = {any}", .{rows.items});
+
+        // After the loop, before returning
+        // Adjust last row to perfectly fill remaining space
+        if (rows.items.len > 0) {
+            const used_height = blk: {
+                var sum: f32 = 0;
+                for (rows.items[0..rows.items.len-1]) |r| sum += r.height;
+                break :blk sum;
+            };
+            rows.items[rows.items.len-1].height = height - used_height;
+        }
 
         return rows.toOwnedSlice(allocator);
     }
