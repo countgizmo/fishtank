@@ -2,6 +2,7 @@ const std = @import("std");
 const ArrayList = std.ArrayList;
 const Allocator = std.mem.Allocator;
 const UiState = @import("state.zig").UiState;
+const TreemapItemClicked = @import("state.zig").TreemapItemClicked;
 const primitives = @import("primitives.zig");
 const Components = @import("components.zig");
 const Module = @import("../parser.zig").Module;
@@ -148,6 +149,8 @@ pub const Treemap = struct {
 
     pub fn render(self: Treemap, ui: *UiState) void {
         var y: f32 = 0;
+        var current_item_idx: usize = 0;
+
         for (self.rows) |row| {
             const row_items = self.items[row.start_index..row.start_index + row.count];
             var x: f32 = 0;
@@ -160,13 +163,34 @@ pub const Treemap = struct {
                     .height = row.height,
 
                 };
-                _ = Components.treemapitem(ui, rect, item.name);
+
+                if (Components.treemapitem(ui, rect, item.name)) {
+                    if (ui.treemap_item_clicked == current_item_idx) {
+                        ui.treemap_item_clicked = null;
+                    } else {
+                        ui.treemap_item_clicked = current_item_idx;
+                        const mouse = rl.GetMousePosition();
+                        ui.active_modal = .{
+                            .x = mouse.x,
+                            .y = mouse.y,
+                        };
+                    }
+                }
 
                 x += width;
-
+                current_item_idx += 1;
             }
             y += row.height;
         }
+
+        if (ui.treemap_item_clicked) |item_clicked| {
+            const item = self.items[item_clicked];
+            std.log.debug("Clicked {s}", .{ item.name });
+            if (ui.active_modal) |active_modal| {
+                Components.modal(ui, active_modal.x, active_modal.y);
+            }
+        }
+
     }
 };
 
