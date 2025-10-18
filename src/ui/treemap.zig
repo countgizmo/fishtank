@@ -148,12 +148,12 @@ pub const Treemap = struct {
     }
 
     pub fn render(self: Treemap, ui: *UiState) void {
-        var y: f32 = 0;
+        var y: f32 = ui.container_y;
         var current_item_idx: usize = 0;
 
         for (self.rows) |row| {
             const row_items = self.items[row.start_index..row.start_index + row.count];
-            var x: f32 = 0;
+            var x: f32 = ui.container_x;
             for (row_items) |item| {
                 const width = (item.weight / row.weight) * ui.container_width;
                 const rect = primitives.Rect {
