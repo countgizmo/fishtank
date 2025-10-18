@@ -185,9 +185,25 @@ pub const Treemap = struct {
 
         if (ui.treemap_item_clicked) |item_clicked| {
             const item = self.items[item_clicked];
-            std.log.debug("Clicked {s}", .{ item.name });
             if (ui.active_modal) |active_modal| {
                 Components.modal(ui, active_modal.x, active_modal.y);
+
+                const start_x = @as(i32, @intFromFloat(active_modal.x));
+                const start_y = @as(i32, @intFromFloat(active_modal.y));
+
+                const header_x = start_x + 5;
+                const header_y = start_y + 10;
+
+                Components.header(ui, header_x, header_y, "Functions:");
+
+                if (item.context) |context| {
+                    for (context.module.functions.items, 0..) |function, idx| {
+                        const fn_item_count = 1 + @as(i32, @intCast(idx));
+                        const label_x = header_x + 5;
+                        const label_y = header_y + (24 * fn_item_count);
+                        Components.label(ui, label_x, label_y, function.name);
+                    }
+                }
             }
         }
 
