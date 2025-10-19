@@ -28,6 +28,7 @@ pub const TreemapRow = struct {
 pub const Treemap = struct {
     items: []TreemapItem,
     rows: []TreemapRow,
+    total_row_height: f32 = 0,
     total_weight: f32 = 0,
     allocator: Allocator,
 
@@ -40,10 +41,18 @@ pub const Treemap = struct {
             total += item.weight;
         }
 
+
+        const rows = try calculateRows(allocator, sorted_items, total, ui.container_width, ui.container_height);
+        var total_row_height: f32 = 0;
+        for (rows) |row| {
+            total_row_height += row.height;
+        }
+
         return Treemap{
             .items = sorted_items,
             .total_weight = total,
-            .rows = try calculateRows(allocator, sorted_items, total, ui.container_width, ui.container_height),
+            .rows = rows,
+            .total_row_height = total_row_height,
             .allocator = allocator
         };
     }
@@ -150,6 +159,7 @@ pub const Treemap = struct {
     pub fn render(self: Treemap, ui: *UiState) void {
         var y: f32 = ui.container_y;
         var current_item_idx: usize = 0;
+        ui.max_scroll = @as(usize, @intFromFloat(self.total_row_height)) - Components.modal_height;
 
         for (self.rows) |row| {
             const row_items = self.items[row.start_index..row.start_index + row.count];
@@ -186,25 +196,39 @@ pub const Treemap = struct {
         if (ui.treemap_item_clicked) |item_clicked| {
             const item = self.items[item_clicked];
             if (ui.active_modal) |active_modal| {
-                Components.modal(ui, active_modal.x, active_modal.y);
-
                 const start_x = @as(i32, @intFromFloat(active_modal.x));
                 const start_y = @as(i32, @intFromFloat(active_modal.y));
+
+                if (Components.modal(ui, active_modal.x, active_modal.y)) {
+                    ui.scroll_offset += rl.GetMouseWheelMove() * 20;
+                    ui.scroll_offset = std.math.clamp(ui.scroll_offset, -@as(f32, @floatFromInt(ui.max_scroll)), 0);
+                }
+
 
                 const header_x = start_x + 5;
                 const header_y = start_y + 10;
 
                 Components.header(ui, header_x, header_y, "Functions:");
 
+                rl.BeginScissorMode(
+                    @intFromFloat(active_modal.x),
+                    @intFromFloat(active_modal.y + 40), // After header
+                    Components.modal_width,
+                    Components.modal_height - 10 - primitives.big_font_size - 24,
+                );
+
                 if (item.context) |context| {
                     for (context.module.functions.items, 0..) |function, idx| {
                         const fn_item_count = 1 + @as(i32, @intCast(idx));
                         const label_x = header_x + 5;
-                        const label_y = header_y + (24 * fn_item_count);
+                        const label_y = header_y + (24 * fn_item_count) + @as(i32, @intFromFloat(ui.scroll_offset));
                         Components.label(ui, label_x, label_y, function.name);
                     }
                 }
+
+                rl.EndScissorMode();
             }
+
         }
 
     }

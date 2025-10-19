@@ -77,20 +77,38 @@ pub fn graphnode(ui: *UiState, x: i32, y: i32, text: []const u8) void {
     Primitives.render_widget(ui.*, widget);
 }
 
-const modal_width = 300;
-const modal_height = 500;
+pub const modal_width = 300;
+pub const modal_height = 500;
 
-pub fn modal(ui: *UiState, x: f32, y: f32) void {
+// TODO(evgheni): return an enum action to support different actions
+pub fn modal(ui: *UiState, x: f32, y: f32) bool {
+    const rect = Rect {
+        .x = x,
+        .y = y,
+        .width = modal_width,
+        .height = modal_height};
+
     const widget = Widget{
-        .rect = Rect{
-            .x = x,
-            .y = y,
-            .width = modal_width,
-            .height = modal_height },
+        .rect = rect,
         .flags = .{ .has_border = true },
     };
 
     Primitives.render_widget(ui.*, widget);
+
+    // Check for scrolling
+
+    const modal_rect = rl.Rectangle {
+        .height = rect.height,
+        .width = rect.width,
+        .x = rect.x,
+        .y = rect.y,
+    };
+
+    if (rl.GetMouseWheelMove() != 0 and rl.CheckCollisionPointRec(rl.GetMousePosition(), modal_rect)) {
+        return true;
+    }
+
+    return false;
 }
 
 pub fn treemapitem(ui: *UiState, rect: Primitives.Rect, text: []const u8) bool {

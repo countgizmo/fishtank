@@ -26,5 +26,7 @@ pub const UiState = struct {
     container_height: f32 = 0,
     treemap_item_clicked: ?usize = null,
     active_modal: ?ActiveModel = null,
+    max_scroll: usize = 0,
+    scroll_offset: f32 = 0,
 };
 
