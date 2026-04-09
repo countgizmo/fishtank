@@ -79,7 +79,6 @@ pub const Project = struct {
 
 
     pub fn analyze(self: *Project, folder_path: []const u8) !void {
-        std.log.debug("Analyzing folder: {s}", .{ folder_path });
         var dir = try std.fs.cwd().openDir(folder_path, .{ .iterate = true });
         defer dir.close();
 

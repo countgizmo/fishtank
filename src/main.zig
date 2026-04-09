@@ -14,6 +14,8 @@ const Components = @import("ui/components.zig");
 const UiState = @import("ui/state.zig").UiState;
 const Project = @import("project.zig").Project;
 const Treemap = @import("ui/treemap.zig").Treemap;
+const Desktop = @import("ui/desktop.zig");
+const Rect = @import("ui/state.zig").Rect;
 
 fn getFontPath(allocator: Allocator) ![:0]u8 {
     const exe_path = try std.fs.selfExeDirPathAlloc(allocator);
@@ -36,8 +38,9 @@ pub fn main() !void {
     rl.SetConfigFlags(rl.FLAG_WINDOW_HIGHDPI);
     rl.InitWindow(width, height, "Fishtank");
     defer rl.CloseWindow();
-    rl.SetTargetFPS(30);
-    rl.EnableEventWaiting();
+    rl.SetTargetFPS(60);
+    rl.SetExitKey(rl.KEY_NULL);
+    // rl.EnableEventWaiting();
 
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer {
@@ -50,6 +53,7 @@ pub fn main() !void {
     defer allocator.free(font_path);
 
     var ui = UiState{
+        .cache = std.StringHashMap(Rect).init(allocator),
         .container_width = width - Primitives.screen_padding,
         .container_height = height - Primitives.screen_padding,
         .container_x = Primitives.screen_padding / 2,
@@ -71,8 +75,8 @@ pub fn main() !void {
     // try project.analyze("test_subjects/very_simple_project");
     // try project.analyze("/Users/ziggy/Projects/private/clojure/zots/src");
     //
-    // project.analyze("/Users/ziggy/Projects/humbleai/hai/main/projects/browser-extension/src/browser_ext") catch |err| {
-    project.analyze("/Users/ziggy/Projects/private/clojure/zots/src") catch |err| {
+    project.analyze("/Users/ziggy/Projects/humbleai/hai/main/projects/browser-extension/src/browser_ext") catch |err| {
+    // project.analyze("/Users/ziggy/Projects/private/clojure/zots/src") catch |err| {
         std.log.err("Analysis failed: {}", .{err});
         return err;
     };
@@ -84,16 +88,11 @@ pub fn main() !void {
     defer treemap.deinit();
 
     while (!rl.WindowShouldClose()) {
+        ui.reset();
         rl.BeginDrawing();
         rl.ClearBackground(Primitives.bg_color);
 
-        // if (rl.IsWindowResized()) {
-        //     ui.container_height = @as(f32, @floatFromInt(rl.GetRenderHeight()));
-        //     ui.container_width = @as(f32, @floatFromInt(rl.GetRenderWidth()));
-        //     try treemap.recalculate(ui);
-        // }
-        // project.render(&ui);
-        treemap.render(&ui);
+        Desktop.render(&ui);
 
         rl.EndDrawing();
     }

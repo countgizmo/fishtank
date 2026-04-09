@@ -2,18 +2,19 @@ const std = @import("std");
 const rl = @import("../raylib.zig").rl;
 const Primitives = @import("primitives.zig");
 const UiState = @import("state.zig").UiState;
-const Widget = Primitives.Widget;
-const WidgetFlags = Primitives.WidgetFlags;
-const Rect = Primitives.Rect;
+const Widget = @import("state.zig").Widget;
+const Rect = @import("state.zig").Rect;
+const WidgetFlags = @import("state.zig").WidgetFlags;
 
-pub fn screen(ui: UiState, width: i32, height: i32) void {
+pub fn screen(ui: *UiState, width: f32, height: f32) void {
     const widget = Widget{
         .rect = Rect{
             .x = 0,
             .y = 0,
-            .width = @as(f32, @floatFromInt(width)),
-            .height = @as(f32, @floatFromInt(height)),
+            .width = width,
+            .height = height,
         },
+        .id = "screen",
         .flags = .{},
     };
 
@@ -33,10 +34,11 @@ pub fn header(ui: *UiState, x: i32, y: i32, text: []const u8) void {
     const widget = Widget{
         .rect = Rect{ .x = label_x, .y = label_y, .width = text_size.x, .height = text_size.y },
         .text = text,
+        .id = text,
         .flags = .{ .has_text = true },
     };
 
-    Primitives.render_widget(ui.*, widget);
+    Primitives.render_widget(ui, widget);
 }
 
 pub fn label(ui: *UiState, x: i32, y: i32, text: []const u8) void {
@@ -52,10 +54,41 @@ pub fn label(ui: *UiState, x: i32, y: i32, text: []const u8) void {
     const widget = Widget{
         .rect = Rect{ .x = label_x, .y = label_y, .width = text_size.x, .height = text_size.y },
         .text = text,
+        .id = text,
         .flags = .{ .has_text = true },
     };
 
     Primitives.render_widget(ui.*, widget);
+}
+
+pub fn bordered_label(ui: *UiState, text: []const u8) void {
+    var buf: [255:0]u8 = undefined;
+    const label_text = std.fmt.bufPrintZ(&buf, "{s}", .{text}) catch "";
+    const text_size = rl.MeasureTextEx(ui.text_config.font, label_text, Primitives.normal_font_size, 1);
+
+    ui.active_text_style.font_size = Primitives.normal_font_size;
+
+    const label_width = text_size.x + 2 * Primitives.text_padding;
+    const label_height = text_size.y + 2 * Primitives.text_padding;
+    const label_x = ui.getXFloat(label_width);
+    const label_y = ui.getYFloat(label_height);
+
+    const widget = Widget{
+        .rect = Rect{
+            .x = label_x,
+            .y = label_y,
+            .width = label_width,
+            .height = label_height,
+        },
+        .text = text,
+        .id = text,
+        .flags = .{
+            .has_text = true,
+            .has_border = true,
+        },
+    };
+
+    Primitives.render_widget(ui, widget);
 }
 
 pub fn graphnode(ui: *UiState, x: i32, y: i32, text: []const u8) void {
@@ -71,6 +104,7 @@ pub fn graphnode(ui: *UiState, x: i32, y: i32, text: []const u8) void {
     const widget = Widget{
         .rect = Rect{ .x = label_x, .y = label_y, .width = text_size.x, .height = text_size.y },
         .text = text,
+        .id = text,
         .flags = .{ .has_text = true, .has_border = true },
     };
 
@@ -90,6 +124,7 @@ pub fn modal(ui: *UiState, x: f32, y: f32) bool {
 
     const widget = Widget{
         .rect = rect,
+        .id = "modal",
         .flags = .{ .has_border = true },
     };
 
@@ -122,6 +157,7 @@ pub fn treemapitem(ui: *UiState, rect: Primitives.Rect, text: []const u8) bool {
             .show_hover_effect = true,
         },
         .text = text,
+        .id = text,
     };
 
     Primitives.render_widget(ui.*, widget);

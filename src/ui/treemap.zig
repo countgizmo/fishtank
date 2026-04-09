@@ -194,6 +194,7 @@ pub const Treemap = struct {
         }
 
         if (ui.treemap_item_clicked) |item_clicked| {
+            ui.scroll_offset = 0;
             const item = self.items[item_clicked];
             if (ui.active_modal) |active_modal| {
                 const start_x = @as(i32, @intFromFloat(active_modal.x));

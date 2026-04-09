@@ -1,6 +1,7 @@
 const std = @import("std");
 const rl = @import("../raylib.zig").rl;
 const UiState = @import("state.zig").UiState;
+const Widget = @import("state.zig").Widget;
 
 pub const bg_color = rl.Color{
     .r = 240,
@@ -30,26 +31,6 @@ pub const text_color = rl.Color{
     .a = 255
 };
 
-pub const Rect = struct {
-    x: f32,
-    y: f32,
-    width: f32,
-    height: f32,
-};
-
-pub const WidgetFlags = packed struct {
-    has_border: bool = false,
-    has_background: bool = false,
-    has_text: bool = false,
-    show_hover_effect: bool = false,
-};
-
-pub const Widget = struct{
-    rect: Rect,
-    flags: WidgetFlags,
-    text: ?[]const u8 = null,
-};
-
 pub const border_width = 2;
 pub const screen_padding = 10;
 pub const big_font_size = 22;
@@ -57,7 +38,7 @@ pub const normal_font_size = 18;
 pub const small_font_size = 14;
 pub const text_padding = 5;
 
-pub fn render_widget(ui: UiState, widget: Widget) void {
+pub fn render_widget(ui: *UiState, widget: Widget) void {
     const body_rect = rl.Rectangle{
         .x = widget.rect.x,
         .y = widget.rect.y,
@@ -74,7 +55,7 @@ pub fn render_widget(ui: UiState, widget: Widget) void {
             .height = widget.rect.height - border_width,
         };
 
-        var border_color = text_color;
+        var border_color = rl.ColorBrightness(text_color, 0.8);
 
         if (widget.flags.show_hover_effect) {
             const mouse_pos = rl.GetMousePosition();
