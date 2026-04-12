@@ -6,13 +6,20 @@ const Widget = @import("state.zig").Widget;
 const Rect = @import("state.zig").Rect;
 const WidgetFlags = @import("state.zig").WidgetFlags;
 
-pub fn screen(ui: *UiState, width: f32, height: f32) void {
+pub fn screen(ui: *UiState ) void {
+    const layout = ui.currentLayout();
+
+    const screen_width = layout.getWidth();
+    const screen_height = layout.getHeight();
+    const screen_x = layout.getXFloat(screen_width);
+    const screen_y = layout.getYFloat(screen_height);
+
     const widget = Widget{
         .rect = Rect{
-            .x = 0,
-            .y = 0,
-            .width = width,
-            .height = height,
+            .x = screen_x,
+            .y = screen_y,
+            .width = screen_width,
+            .height = screen_height,
         },
         .id = "screen",
         .flags = .{},
@@ -61,17 +68,20 @@ pub fn label(ui: *UiState, x: i32, y: i32, text: []const u8) void {
     Primitives.render_widget(ui.*, widget);
 }
 
-pub fn bordered_label(ui: *UiState, text: []const u8) void {
+pub fn bordered_label(ui: *UiState, text: []const u8) !void {
     var buf: [255:0]u8 = undefined;
     const label_text = std.fmt.bufPrintZ(&buf, "{s}", .{text}) catch "";
     const text_size = rl.MeasureTextEx(ui.text_config.font, label_text, Primitives.normal_font_size, 1);
 
+    const id = text;
+    var layout = ui.currentLayout();
+    try layout.registerAsChild(ui.arena.allocator(), id);
     ui.active_text_style.font_size = Primitives.normal_font_size;
 
     const label_width = text_size.x + 2 * Primitives.text_padding;
     const label_height = text_size.y + 2 * Primitives.text_padding;
-    const label_x = ui.getXFloat(label_width);
-    const label_y = ui.getYFloat(label_height);
+    const label_x = layout.getXFloat(label_width);
+    const label_y = layout.getYFloat(label_height);
 
     const widget = Widget{
         .rect = Rect{
@@ -81,7 +91,7 @@ pub fn bordered_label(ui: *UiState, text: []const u8) void {
             .height = label_height,
         },
         .text = text,
-        .id = text,
+        .id = id,
         .flags = .{
             .has_text = true,
             .has_border = true,

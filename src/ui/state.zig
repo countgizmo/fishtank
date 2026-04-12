@@ -44,57 +44,90 @@ pub const LayoutType = enum {
     Column,
 };
 
+pub const Layout = struct {
+    x: f32,
+    y: f32,
+    width: f32,
+    height: f32,
+    padding: f32,
+    gap: f32 = 0,
+    type: LayoutType = .Free,
+    next_x: ?f32 = null,
+    next_y: ?f32 = null,
+    children: ArrayList([]const u8) = ArrayList([]const u8).empty,
+
+    pub fn getXFloat(self: *Layout, width: f32) f32 {
+        if (self.next_x) |next_x| {
+            const x = next_x;
+            if (self.type == .Row) {
+                self.next_x = x + width;
+            }
+            return x + self.padding + self.gap;
+        } else {
+            self.next_x = self.x + width;
+            return self.x + self.padding;
+        }
+    }
+
+    pub fn getYFloat(self: *Layout, height: f32) f32 {
+        if (self.next_y) |next_y| {
+            if (self.type == .Column) {
+                self.next_y = next_y + height + self.padding;
+            }
+            return self.next_y.? + self.padding;
+        } else {
+            self.next_y = self.y;
+            return self.y + self.padding;
+        }
+    }
+
+    pub fn getWidth(self: *Layout) f32 {
+        return self.width - (self.padding * 2);
+    }
+
+    pub fn getHeight(self: *Layout) f32 {
+        return self.height - (self.padding * 2);
+    }
+
+    pub fn registerAsChild(self: *Layout, allocator: Allocator, id: []const u8) !void {
+        try self.children.append(allocator, id);
+    }
+};
+
 pub const UiState = struct {
     text_config: TextConfig,
     active_text_style: ActiveTextStyle,
-    margin: i32 = 10,
-    next_x: f32 = 0,
-    next_y: f32 = 0,
-    container_x: f32 = 0,
-    container_y: f32 = 0,
-    container_width: f32 = 0,
-    container_height: f32 = 0,
     treemap_item_clicked: ?usize = null,
     active_modal: ?ActiveModel = null,
     max_scroll: usize = 0,
     scroll_offset: f32 = 0,
-    padding: f32 = 10,
-    layout_type: LayoutType = .Free,
-    parentStack: ArrayList(usize) = .empty,
-    cache: StringHashMap(Rect),
 
+    arena: std.heap.ArenaAllocator,
+    cache: StringHashMap(Rect),
+    layout_stack: ArrayList(*Layout) = ArrayList(*Layout).empty,
+    current_layout_idx: usize = 0,
+
+    pub fn pushLayout(self: *UiState, layout: *Layout) !void {
+        if (self.layout_stack.items.len > 0) {
+            self.current_layout_idx += 1;
+        }
+
+        try self.layout_stack.append(self.arena.allocator(), layout);
+    }
+
+    pub fn popLayout(self: *UiState) void {
+        if (self.current_layout_idx > 0) {
+            self.current_layout_idx -= 1;
+        }
+    }
+
+    pub fn currentLayout(self: UiState) *Layout {
+        return self.layout_stack.items[self.current_layout_idx];
+    }
 
     pub fn reset(self: *UiState) void {
-        self.next_x = 0;
-        self.next_y = 0;
-    }
-
-    pub fn getXFloat(self: *UiState, width: f32) f32 {
-        const x = self.next_x + self.padding;
-
-        if (self.layout_type == .Row) {
-            self.next_x = self.next_x + width + self.padding;
-        }
-
-        return x;
-    }
-
-    pub fn getYFloat(self: *UiState, height: f32) f32 {
-        const y = self.next_y + self.padding;
-
-        if (self.layout_type == .Column) {
-            self.next_y = self.next_y + height + self.padding;
-        }
-
-        return y;
-    }
-
-    pub fn rowStart(self: *UiState) void {
-        self.layout_type = .Row;
-    }
-
-    pub fn rowEnd(self: *UiState) void {
-        self.layout_type = .Free;
+        _ = self.arena.reset(.retain_capacity);
+        self.layout_stack = .empty;
     }
 
     pub fn deinite(self: *UiState, allocator: Allocator) void {
