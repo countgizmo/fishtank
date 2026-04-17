@@ -39,6 +39,14 @@ pub const small_font_size = 14;
 pub const text_padding = 5;
 
 pub fn render_widget(ui: *UiState, widget: Widget) void {
+    if (widget.id) |cache_key| {
+        ui.addToCache(cache_key, widget.rect) catch |err| {
+            std.log.err("cache write failed for {s}: {}", .{cache_key, err});
+        };
+    }
+
+    if (ui.pass == .measure) return;
+
     const body_rect = rl.Rectangle{
         .x = widget.rect.x,
         .y = widget.rect.y,
@@ -84,9 +92,4 @@ pub fn render_widget(ui: *UiState, widget: Widget) void {
             text_color);
     }
 
-    if (widget.id) |cache_key| {
-        ui.addToCache(cache_key, widget.rect) catch |err| {
-            std.log.err("cache write failed for {s}: {}", .{cache_key, err});
-        };
-    }
 }

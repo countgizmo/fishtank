@@ -63,6 +63,7 @@ pub fn main() !void {
         .active_text_style = .{
             .font_size = Primitives.normal_font_size,
         },
+        .pass = .measure,
     };
     defer rl.UnloadFont(ui.text_config.font);
     defer ui.arena.deinit();
@@ -94,8 +95,10 @@ pub fn main() !void {
         rl.ClearBackground(Primitives.bg_color);
 
         // First pass to render commponents that don't depend on anything
+        ui.pass =.measure;
         try Desktop.render(&ui, width, height);
         // Second pass to render parents based on children
+        ui.pass = .draw;
         try Desktop.render(&ui, width, height);
 
         rl.EndDrawing();
