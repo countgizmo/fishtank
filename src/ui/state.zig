@@ -54,7 +54,7 @@ pub const Layout = struct {
     type: LayoutType = .Free,
     next_x: ?f32 = null,
     next_y: ?f32 = null,
-    children: ArrayList([]const u8) = ArrayList([]const u8).empty,
+    id: []const u8,
 
     pub fn getXFloat(self: *Layout, width: f32) f32 {
         if (self.next_x) |next_x| {
@@ -88,10 +88,6 @@ pub const Layout = struct {
     pub fn getHeight(self: *Layout) f32 {
         return self.height - (self.padding * 2);
     }
-
-    pub fn registerAsChild(self: *Layout, allocator: Allocator, id: []const u8) !void {
-        try self.children.append(allocator, id);
-    }
 };
 
 pub const UiState = struct {
@@ -103,31 +99,42 @@ pub const UiState = struct {
     scroll_offset: f32 = 0,
 
     arena: std.heap.ArenaAllocator,
+    layout_stack: ArrayList(*Layout) = .empty,
+    children_by_layout: StringHashMap(ArrayList([]const u8)),
     cache: StringHashMap(Rect),
-    layout_stack: ArrayList(*Layout) = ArrayList(*Layout).empty,
-    current_layout_idx: usize = 0,
+
+    pub fn addToCache(self: *UiState, key: []const u8, rect: Rect) !void {
+        try self.cache.put(key, rect);
+    }
+
+    pub fn getFromCache(self: *UiState, key: []const u8) ?Rect{
+        return self.cache.get(key);
+    }
 
     pub fn pushLayout(self: *UiState, layout: *Layout) !void {
-        if (self.layout_stack.items.len > 0) {
-            self.current_layout_idx += 1;
-        }
-
         try self.layout_stack.append(self.arena.allocator(), layout);
     }
 
     pub fn popLayout(self: *UiState) void {
-        if (self.current_layout_idx > 0) {
-            self.current_layout_idx -= 1;
-        }
+        _ = self.layout_stack.pop();
     }
 
     pub fn currentLayout(self: UiState) *Layout {
-        return self.layout_stack.items[self.current_layout_idx];
+        return self.layout_stack.items[self.layout_stack.items.len - 1];
     }
+
+    pub fn registerAsChild(self: *UiState, child_id: []const u8) !void {
+        const layout = self.currentLayout();
+        const entry = try self.children_by_layout.getOrPut(layout.id);
+        if (!entry.found_existing) entry.value_ptr.* = .empty;
+        try entry.value_ptr.append(self.arena.allocator(), child_id);
+    }
+
 
     pub fn reset(self: *UiState) void {
         _ = self.arena.reset(.retain_capacity);
         self.layout_stack = .empty;
+        self.children_by_layout.clearRetainingCapacity();
     }
 
     pub fn deinite(self: *UiState, allocator: Allocator) void {

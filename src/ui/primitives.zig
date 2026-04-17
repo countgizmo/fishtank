@@ -83,4 +83,10 @@ pub fn render_widget(ui: *UiState, widget: Widget) void {
             0,
             text_color);
     }
+
+    if (widget.id) |cache_key| {
+        ui.addToCache(cache_key, widget.rect) catch |err| {
+            std.log.err("cache write failed for {s}: {}", .{cache_key, err});
+        };
+    }
 }

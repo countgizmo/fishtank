@@ -56,6 +56,7 @@ pub fn main() !void {
     var ui = UiState{
         .arena = std.heap.ArenaAllocator.init(allocator),
         .cache = std.StringHashMap(Rect).init(allocator),
+        .children_by_layout = std.StringHashMap(ArrayList([]const u8)).init(allocator),
         .text_config = .{
             .font = rl.LoadFont(font_path.ptr)
         },
@@ -65,6 +66,8 @@ pub fn main() !void {
     };
     defer rl.UnloadFont(ui.text_config.font);
     defer ui.arena.deinit();
+    defer ui.cache.deinit();
+    defer ui.children_by_layout.deinit();
 
     rl.SetTextureFilter(ui.text_config.font.texture, rl.TEXTURE_FILTER_BILINEAR);
 
@@ -86,19 +89,14 @@ pub fn main() !void {
     // defer treemap.deinit();
 
     while (!rl.WindowShouldClose()) {
-        var initial_layout = Layout{
-            .x = 0,
-            .y = 0,
-            .width = width,
-            .height = height,
-            .padding = 10,
-        };
-        try ui.pushLayout(&initial_layout);
 
         rl.BeginDrawing();
         rl.ClearBackground(Primitives.bg_color);
 
-        try Desktop.render(&ui);
+        // First pass to render commponents that don't depend on anything
+        try Desktop.render(&ui, width, height);
+        // Second pass to render parents based on children
+        try Desktop.render(&ui, width, height);
 
         rl.EndDrawing();
 

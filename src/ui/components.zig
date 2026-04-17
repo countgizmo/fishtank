@@ -2,6 +2,7 @@ const std = @import("std");
 const rl = @import("../raylib.zig").rl;
 const Primitives = @import("primitives.zig");
 const UiState = @import("state.zig").UiState;
+const Layout = @import("state.zig").Layout;
 const Widget = @import("state.zig").Widget;
 const Rect = @import("state.zig").Rect;
 const WidgetFlags = @import("state.zig").WidgetFlags;
@@ -48,24 +49,35 @@ pub fn header(ui: *UiState, x: i32, y: i32, text: []const u8) void {
     Primitives.render_widget(ui, widget);
 }
 
-pub fn label(ui: *UiState, x: i32, y: i32, text: []const u8) void {
+pub fn label(ui: *UiState, text: []const u8) !void {
     var buf: [255:0]u8 = undefined;
     const label_text = std.fmt.bufPrintZ(&buf, "{s}", .{text}) catch "";
 
     const text_size = rl.MeasureTextEx(ui.text_config.font, label_text, Primitives.normal_font_size, 1);
 
+    const id = text;
+    var layout = ui.currentLayout();
+    try ui.registerAsChild(id);
     ui.active_text_style.font_size = Primitives.normal_font_size;
 
-    const label_x = @as(f32, @floatFromInt(x));
-    const label_y = @as(f32, @floatFromInt(y));
+    const label_width = text_size.x + 2 * Primitives.text_padding;
+    const label_height = text_size.y + 2 * Primitives.text_padding;
+    const label_x = layout.getXFloat(label_width);
+    const label_y = layout.getYFloat(label_height);
+
     const widget = Widget{
-        .rect = Rect{ .x = label_x, .y = label_y, .width = text_size.x, .height = text_size.y },
+        .rect = Rect{
+            .x = label_x,
+            .y = label_y,
+            .width = label_width,
+            .height = label_height,
+        },
         .text = text,
-        .id = text,
+        .id = id,
         .flags = .{ .has_text = true },
     };
 
-    Primitives.render_widget(ui.*, widget);
+    Primitives.render_widget(ui, widget);
 }
 
 pub fn bordered_label(ui: *UiState, text: []const u8) !void {
@@ -75,7 +87,7 @@ pub fn bordered_label(ui: *UiState, text: []const u8) !void {
 
     const id = text;
     var layout = ui.currentLayout();
-    try layout.registerAsChild(ui.arena.allocator(), id);
+    try ui.registerAsChild(id);
     ui.active_text_style.font_size = Primitives.normal_font_size;
 
     const label_width = text_size.x + 2 * Primitives.text_padding;
@@ -94,6 +106,58 @@ pub fn bordered_label(ui: *UiState, text: []const u8) !void {
         .id = id,
         .flags = .{
             .has_text = true,
+            .has_border = true,
+        },
+    };
+
+    Primitives.render_widget(ui, widget);
+}
+
+pub fn row(ui: *UiState, id: []const u8) !void {
+    const layout = ui.currentLayout();
+
+    // If the children are not yet registered, there's nothing to do
+    const children = ui.children_by_layout.get(layout.id) orelse return;
+    if (children.items.len == 0) return;
+
+    // In row we are interested in the heighest child
+    // and the sum of widths of all children.
+    // We can use this information to calculate the height of the row
+    // that will fit even the heighest child and the minimal width of the row.
+    //
+    // Some rows can take the space of the layout (main menu, for example).
+    // Some rows might support line breaks.
+    // In any case sum of widths is needed.
+
+    var max_height: f32 = 0;
+    var sum_width: f32 = 0;
+
+    for (children.items) |child| {
+        if (ui.getFromCache(child)) |child_rect| {
+            sum_width += child_rect.width;
+
+            if (child_rect.height > max_height) {
+                max_height = child_rect.height;
+            }
+        } else {
+            // If at least one child is missing in cache
+            // we stop calculating the row.
+            // We will have to wait for the next frame to render.
+            return;
+        }
+    }
+
+    const row_rect: Rect = .{
+        .x = layout.x,
+        .y = layout.y,
+        .height = max_height + (2 * layout.padding),
+        .width = layout.width,
+    };
+
+    const widget = Widget{
+        .rect = row_rect,
+        .id = id,
+        .flags = .{
             .has_border = true,
         },
     };
