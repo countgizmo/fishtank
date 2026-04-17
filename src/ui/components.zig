@@ -49,7 +49,7 @@ pub fn header(ui: *UiState, x: i32, y: i32, text: []const u8) void {
     Primitives.render_widget(ui, widget);
 }
 
-pub fn label(ui: *UiState, text: []const u8) !void {
+fn label_base_widget(ui: *UiState, text: []const u8) Widget {
     var buf: [255:0]u8 = undefined;
     const label_text = std.fmt.bufPrintZ(&buf, "{s}", .{text}) catch "";
 
@@ -57,7 +57,9 @@ pub fn label(ui: *UiState, text: []const u8) !void {
 
     const id = text;
     var layout = ui.currentLayout();
-    try ui.registerAsChild(id);
+    ui.registerAsChild(id) catch |err| {
+        std.log.err("Failed to register label as child with id = {s}: {}", .{id, err});
+    };
     ui.active_text_style.font_size = Primitives.normal_font_size;
 
     const label_width = text_size.x + 2 * Primitives.text_padding;
@@ -77,40 +79,46 @@ pub fn label(ui: *UiState, text: []const u8) !void {
         .flags = .{ .has_text = true },
     };
 
+    return widget;
+}
+
+pub fn label(ui: *UiState, text: []const u8) void {
+    const widget = label_base_widget(ui, text);
     Primitives.render_widget(ui, widget);
 }
 
-pub fn bordered_label(ui: *UiState, text: []const u8) !void {
-    var buf: [255:0]u8 = undefined;
-    const label_text = std.fmt.bufPrintZ(&buf, "{s}", .{text}) catch "";
-    const text_size = rl.MeasureTextEx(ui.text_config.font, label_text, Primitives.normal_font_size, 1);
-
-    const id = text;
-    var layout = ui.currentLayout();
-    try ui.registerAsChild(id);
-    ui.active_text_style.font_size = Primitives.normal_font_size;
-
-    const label_width = text_size.x + 2 * Primitives.text_padding;
-    const label_height = text_size.y + 2 * Primitives.text_padding;
-    const label_x = layout.getXFloat(label_width);
-    const label_y = layout.getYFloat(label_height);
-
-    const widget = Widget{
-        .rect = Rect{
-            .x = label_x,
-            .y = label_y,
-            .width = label_width,
-            .height = label_height,
-        },
-        .text = text,
-        .id = id,
-        .flags = .{
-            .has_text = true,
-            .has_border = true,
-        },
+pub fn bordered_label(ui: *UiState, text: []const u8) void {
+    var widget = label_base_widget(ui, text);
+    widget.flags = .{
+        .has_text = true,
+        .has_border = true,
     };
 
     Primitives.render_widget(ui, widget);
+}
+
+pub fn checkRectCollision(rect: Rect, x: f32, y: f32) bool {
+    return ((x >= rect.x and x <= rect.x + rect.width) and
+            (y >= rect.y and y <= rect.y + rect.height));
+}
+
+pub fn clickable_label(ui: *UiState, text: []const u8) bool {
+    var widget = label_base_widget(ui, text);
+    widget.flags = .{
+        .has_text = true,
+        .show_hover_effect = true,
+    };
+
+    Primitives.render_widget(ui, widget);
+
+    if (rl.IsMouseButtonReleased(rl.MOUSE_BUTTON_LEFT)) {
+        const mouse = rl.GetMousePosition();
+        if (checkRectCollision(widget.rect, mouse.x, mouse.y)) {
+            return true;
+        }
+    }
+
+    return false;
 }
 
 pub fn row(ui: *UiState, id: []const u8) !void {

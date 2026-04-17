@@ -63,8 +63,8 @@ pub fn render_widget(ui: *UiState, widget: Widget) void {
             .height = widget.rect.height - border_width,
         };
 
-        var border_color = rl.ColorBrightness(text_color, 0.8);
 
+        var border_color = rl.ColorBrightness(text_color, 0.8);
         if (widget.flags.show_hover_effect) {
             const mouse_pos = rl.GetMousePosition();
             const is_hovered = rl.CheckCollisionPointRec(mouse_pos, body_rect);
@@ -74,6 +74,16 @@ pub fn render_widget(ui: *UiState, widget: Widget) void {
             }
         }
         rl.DrawRectangleLinesEx(border_rect, border_width, border_color);
+    } else {
+        if (widget.flags.show_hover_effect) {
+            const mouse_pos = rl.GetMousePosition();
+            const is_hovered = rl.CheckCollisionPointRec(mouse_pos, body_rect);
+
+            if (is_hovered) {
+                const hover_bg_color = rl.ColorBrightness(terminal_bg_color, 0.5);
+                rl.DrawRectangleRec(body_rect, hover_bg_color);
+            }
+        }
     }
 
     if (widget.flags.has_text and widget.text != null) {
