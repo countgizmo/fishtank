@@ -52,33 +52,24 @@ pub const Layout = struct {
     padding: f32,
     gap: f32 = 0,
     type: LayoutType = .Free,
-    next_x: ?f32 = null,
-    next_y: ?f32 = null,
+    next_x: f32 = 0 ,
+    next_y: f32 = 0,
     id: []const u8,
 
     pub fn getXFloat(self: *Layout, width: f32) f32 {
-        if (self.next_x) |next_x| {
-            const x = next_x;
-            if (self.type == .Row) {
-                self.next_x = x + width;
-            }
-            return x + self.padding + self.gap;
-        } else {
-            self.next_x = self.x + width;
-            return self.x + self.padding;
+        const x = self.next_x;
+        if (self.type == .Row) {
+            self.next_x = x + width + self.gap;
         }
+        return x;
     }
 
     pub fn getYFloat(self: *Layout, height: f32) f32 {
-        if (self.next_y) |next_y| {
-            if (self.type == .Column) {
-                self.next_y = next_y + height + self.padding;
-            }
-            return self.next_y.? + self.padding;
-        } else {
-            self.next_y = self.y;
-            return self.y + self.padding;
+        const y = self.next_y;
+        if (self.type == .Column) {
+            self.next_y = self.next_y + height + self.padding;
         }
+        return y;
     }
 
     pub fn getWidth(self: *Layout) f32 {
@@ -91,6 +82,7 @@ pub const Layout = struct {
 };
 
 pub const UiState = struct {
+    pass: enum { measure, draw },
     text_config: TextConfig,
     active_text_style: ActiveTextStyle,
     treemap_item_clicked: ?usize = null,
