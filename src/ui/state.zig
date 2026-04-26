@@ -39,46 +39,45 @@ pub const Widget = struct{
 };
 
 pub const LayoutType = enum {
-    Free,
-    Row,
-    Column,
+    free,
+    row,
+    column,
 };
 
 pub const Layout = struct {
     x: f32,
     y: f32,
-    width: f32,
-    height: f32,
+    available_width: f32,
+    available_height: f32,
     padding: f32,
-    gap: f32 = 0,
-    type: LayoutType = .Free,
-    next_x: f32 = 0 ,
-    next_y: f32 = 0,
+    type: LayoutType = .free,
     id: []const u8,
 
-    pub fn getXFloat(self: *Layout, width: f32) f32 {
-        const x = self.next_x;
-        if (self.type == .Row) {
-            self.next_x = x + width + self.gap;
-        }
-        return x;
-    }
+    // pub fn getXFloat(self: *Layout, width: f32) f32 {
+    //     const x = self.next_x;
+    //     if (self.type == .Row) {
+    //         self.next_x = x + width + self.gap;
+    //     }
+    //     return x;
+    // }
+    //
+    // pub fn getYFloat(self: *Layout, height: f32) f32 {
+    //     const y = self.next_y;
+    //     if (self.type == .Column) {
+    //         self.next_y = self.next_y + height + self.padding;
+    //     }
+    //     return y;
+    // }
+    //
+    // pub fn getWidth(self: *Layout) f32 {
+    //     return self.available_width - (self.padding * 2);
+    // }
+    //
+    // pub fn getHeight(self: *Layout) f32 {
+    //     return self.available_height - (self.padding * 2);
+    // }
 
-    pub fn getYFloat(self: *Layout, height: f32) f32 {
-        const y = self.next_y;
-        if (self.type == .Column) {
-            self.next_y = self.next_y + height + self.padding;
-        }
-        return y;
-    }
 
-    pub fn getWidth(self: *Layout) f32 {
-        return self.width - (self.padding * 2);
-    }
-
-    pub fn getHeight(self: *Layout) f32 {
-        return self.height - (self.padding * 2);
-    }
 };
 
 pub const UiState = struct {
@@ -99,7 +98,7 @@ pub const UiState = struct {
         try self.cache.put(key, rect);
     }
 
-    pub fn getFromCache(self: *UiState, key: []const u8) ?Rect{
+    pub fn getFromCache(self: UiState, key: []const u8) ?Rect{
         return self.cache.get(key);
     }
 
@@ -120,6 +119,59 @@ pub const UiState = struct {
         const entry = try self.children_by_layout.getOrPut(layout.id);
         if (!entry.found_existing) entry.value_ptr.* = .empty;
         try entry.value_ptr.append(self.arena.allocator(), child_id);
+    }
+
+    pub fn getNextX(self: UiState, for_id: []const u8) f32 {
+        if (self.getFromCache(for_id)) |rect| {
+            return rect.x;
+        }
+
+        const layout = self.currentLayout();
+
+        switch (layout.type) {
+            .column, .free => return layout.x + layout.padding,
+            .row => {
+                const children = self.children_by_layout.get(layout.id) orelse return layout.x + layout.padding;
+                if (children.items.len == 0) return layout.x + layout.padding;
+
+                var sum_width: f32 = 0;
+
+                for (children.items) |child| {
+                    if (self.getFromCache(child)) |child_rect| {
+                        sum_width += child_rect.width;
+                    }
+                }
+
+                return layout.x + layout.padding +  sum_width + layout.padding;
+            },
+        }
+    }
+
+    pub fn getNextY(self: UiState, for_id: []const u8) f32 {
+        if (self.getFromCache(for_id)) |rect| {
+            return rect.y;
+        }
+
+        const layout = self.currentLayout();
+
+        switch (layout.type) {
+            .row, .free => return layout.y + layout.padding,
+            .column =>  {
+                const children = self.children_by_layout.get(layout.id) orelse return layout.y + layout.padding;
+                if (children.items.len == 0) return layout.y + layout.padding;
+
+                var sum_height: f32 = 0;
+
+                for (children.items) |child| {
+                    if (self.getFromCache(child)) |child_rect| {
+                        sum_height += child_rect.height;
+                    }
+                }
+
+                return layout.y + layout.padding + sum_height + layout.padding;
+            },
+        }
+
     }
 
 

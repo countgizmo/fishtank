@@ -9,11 +9,12 @@ const WidgetFlags = @import("state.zig").WidgetFlags;
 
 pub fn screen(ui: *UiState ) void {
     const layout = ui.currentLayout();
+    const id = "screen";
 
-    const screen_width = layout.getWidth();
-    const screen_height = layout.getHeight();
-    const screen_x = layout.getXFloat(screen_width);
-    const screen_y = layout.getYFloat(screen_height);
+    const screen_width = layout.available_width - (2*layout.padding);
+    const screen_height = layout.available_height - (2*layout.padding);
+    const screen_x = ui.getNextX(id);
+    const screen_y = layout.y + layout.padding;
 
     const widget = Widget{
         .rect = Rect{
@@ -22,11 +23,15 @@ pub fn screen(ui: *UiState ) void {
             .width = screen_width,
             .height = screen_height,
         },
-        .id = "screen",
+        .id = id,
         .flags = .{},
     };
 
     Primitives.render_widget(ui, widget);
+
+    ui.registerAsChild(id) catch |err| {
+        std.log.err("Failed to register screen as child with id = {s}: {}", .{id, err});
+    };
 }
 
 pub fn header(ui: *UiState, x: i32, y: i32, text: []const u8) void {
@@ -56,16 +61,12 @@ fn label_base_widget(ui: *UiState, text: []const u8) Widget {
     const text_size = rl.MeasureTextEx(ui.text_config.font, label_text, Primitives.normal_font_size, 1);
 
     const id = text;
-    var layout = ui.currentLayout();
-    ui.registerAsChild(id) catch |err| {
-        std.log.err("Failed to register label as child with id = {s}: {}", .{id, err});
-    };
     ui.active_text_style.font_size = Primitives.normal_font_size;
 
     const label_width = text_size.x + 2 * Primitives.text_padding;
     const label_height = text_size.y + 2 * Primitives.text_padding;
-    const label_x = layout.getXFloat(label_width);
-    const label_y = layout.getYFloat(label_height);
+    const label_x = ui.getNextX(id);
+    const label_y = ui.getNextY(id);
 
     const widget = Widget{
         .rect = Rect{
@@ -77,6 +78,10 @@ fn label_base_widget(ui: *UiState, text: []const u8) Widget {
         .text = text,
         .id = id,
         .flags = .{ .has_text = true },
+    };
+
+    ui.registerAsChild(id) catch |err| {
+        std.log.err("Failed to register label as child with id = {s}: {}", .{id, err});
     };
 
     return widget;
@@ -121,11 +126,11 @@ pub fn clickable_label(ui: *UiState, text: []const u8) bool {
     return false;
 }
 
-pub fn row(ui: *UiState, id: []const u8) !void {
-    const layout = ui.currentLayout();
+pub fn row_start(ui: *UiState, id: []const u8, children_layout: Layout) !void {
+    const parent_layout = ui.currentLayout();
 
     // If the children are not yet registered, there's nothing to do
-    const children = ui.children_by_layout.get(layout.id) orelse return;
+    const children = ui.children_by_layout.get(children_layout.id) orelse return;
     if (children.items.len == 0) return;
 
     // In row we are interested in the heighest child
@@ -155,15 +160,70 @@ pub fn row(ui: *UiState, id: []const u8) !void {
         }
     }
 
+    const height =  children_layout.padding + max_height + children_layout.padding;
+    const width = parent_layout.available_width;
+
     const row_rect: Rect = .{
-        .x = layout.x,
-        .y = layout.y,
-        .height = max_height + (2 * layout.padding),
-        .width = layout.width,
+        .x = ui.getNextX(id),
+        .y = ui.getNextY(id),
+        .height = height,
+        .width = width,
     };
 
     const widget = Widget{
         .rect = row_rect,
+        .id = id,
+        .flags = .{
+            .has_border = true,
+        },
+    };
+
+    Primitives.render_widget(ui, widget);
+
+    ui.registerAsChild(id) catch |err| {
+        std.log.err("Failed to register row as child with id = {s}: {}", .{id, err});
+    };
+}
+
+pub fn row_end(ui: *UiState) void {
+    ui.popLayout();
+}
+
+pub fn column(ui: *UiState, id: []const u8) !void {
+    const layout = ui.currentLayout();
+
+    // If the children are not yet registered, there's nothing to do
+    const children = ui.children_by_layout.get(layout.id) orelse return;
+    if (children.items.len == 0) return;
+
+    var max_width: f32 = 0;
+    var sum_height: f32 = 0;
+
+    for (children.items) |child| {
+        if (ui.getFromCache(child)) |child_rect| {
+            sum_height += child_rect.height + (2 * layout.padding);
+
+            const cur_width = child_rect.width + (2 * layout.padding);
+            if (cur_width > max_width) {
+                max_width = cur_width;
+            }
+        } else {
+            // If at least one child is missing in cache
+            // we stop calculating the row.
+            // We will have to wait for the next frame to render.
+            return;
+        }
+    }
+
+    const col_rect: Rect = .{
+        .x = layout.x,
+        .y = layout.y,
+        .height = sum_height,
+        .width = max_width + (2 * layout.padding),
+    };
+
+    const widget = Widget{
+        .rect = col_rect,
         .id = id,
         .flags = .{
             .has_border = true,

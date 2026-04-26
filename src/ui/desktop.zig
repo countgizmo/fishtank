@@ -4,41 +4,63 @@ const Layout = @import("state.zig").Layout;
 const components = @import("components.zig");
 
 pub fn render(ui: *UiState, width: f32, height: f32) !void {
-    var initial_layout = Layout{
-        .id = "root",
+    var initial_layout = Layout {
+        .id = "root_layout",
         .x = 0,
         .y = 0,
-        .width = width,
-        .height = height,
+        .available_width = width,
+        .available_height = height,
         .padding = 10,
-        .next_x = 10,
-        .next_y = 10,
+        .type = .free,
     };
     try ui.pushLayout(&initial_layout);
 
-    components.screen(ui);
+        components.screen(ui);
 
-    const layout = ui.currentLayout();
+        var screen_layout = Layout {
+            .id = "screen_layout",
+            .x = initial_layout.x + initial_layout.padding,
+            .y = initial_layout.y + initial_layout.padding,
+            .available_width = initial_layout.available_width - (2*initial_layout.padding),
+            .available_height = initial_layout.available_height - (2*initial_layout.padding),
+            .padding = 0,
+            .type = .column,
+        };
+        try ui.pushLayout(&screen_layout);
 
-    var main_menu_layout = Layout {
-        .id = "main_menu_layout",
-        .x = layout.x + layout.padding,
-        .y = layout.y + layout.padding,
-        .next_x = layout.x + layout.padding + 5,
-        .next_y = layout.y + layout.padding + 5,
-        .width = layout.getWidth(),
-        .height = layout.getHeight(),
-        .padding = 5,
-        .gap = 10,
-        .type = .Row
-    };
+            var main_menu_layout = Layout {
+                .id = "main_menu_layout",
+                .x = screen_layout.x,
+                .y = screen_layout.y,
+                .available_width = initial_layout.available_width - initial_layout.padding,
+                .available_height = initial_layout.available_height - initial_layout.padding,
+                .padding = 5,
+                .type = .row
+            };
 
-    try ui.pushLayout(&main_menu_layout);
-        try components.row(ui, "main_menu_row");
-        if (components.clickable_label(ui, "File")) {
-            log.debug("Clicked File", .{});
-        }
-        components.label(ui, "Edit");
-        components.label(ui, "Go");
+            try components.row_start(ui, "main_menu_row", main_menu_layout);
+
+            try ui.pushLayout(&main_menu_layout);
+                    if (components.clickable_label(ui, "File")) {
+                        var menu_dropdown_layout = Layout {
+                            .id = "main_menu_dropdown_layout",
+                            .x = main_menu_layout.x,
+                            .y = main_menu_layout.y,
+                            .available_width = screen_layout.available_width,
+                            .available_height = screen_layout.available_height - main_menu_layout.available_height,
+                            .padding = 5,
+                            .type = .column,
+                        };
+
+                        try ui.pushLayout(&menu_dropdown_layout);
+                            try components.column(ui, "main_menu_dropdown");
+                            components.label(ui, "About...");
+                            components.label(ui, "Chooser");
+                        ui.popLayout();
+                    }
+                    components.label(ui, "Edit");
+                    components.label(ui, "Go");
+            ui.popLayout();
+        ui.popLayout();
     ui.popLayout();
 }
