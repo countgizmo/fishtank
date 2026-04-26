@@ -97,6 +97,7 @@ pub fn main() !void {
         // First pass to render commponents that don't depend on anything
         ui.pass =.measure;
         try Desktop.render(&ui, width, height);
+
         // Second pass to render parents based on children
         ui.pass = .draw;
         try Desktop.render(&ui, width, height);

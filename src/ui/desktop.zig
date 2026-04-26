@@ -1,4 +1,6 @@
 const log = @import("std").log;
+const mem = @import("std").mem;
+
 const UiState = @import("state.zig").UiState;
 const Layout = @import("state.zig").Layout;
 const components = @import("components.zig");
@@ -14,7 +16,6 @@ pub fn render(ui: *UiState, width: f32, height: f32) !void {
         .type = .free,
     };
     try ui.pushLayout(&initial_layout);
-
         components.screen(ui);
 
         var screen_layout = Layout {
@@ -27,7 +28,6 @@ pub fn render(ui: *UiState, width: f32, height: f32) !void {
             .type = .column,
         };
         try ui.pushLayout(&screen_layout);
-
             var main_menu_layout = Layout {
                 .id = "main_menu_layout",
                 .x = screen_layout.x,
@@ -38,28 +38,54 @@ pub fn render(ui: *UiState, width: f32, height: f32) !void {
                 .type = .row
             };
 
-            try components.row_start(ui, "main_menu_row", main_menu_layout);
+            try components.row(ui, "main_menu_row", main_menu_layout);
 
             try ui.pushLayout(&main_menu_layout);
-                    if (components.clickable_label(ui, "File")) {
-                        var menu_dropdown_layout = Layout {
-                            .id = "main_menu_dropdown_layout",
-                            .x = main_menu_layout.x,
-                            .y = main_menu_layout.y,
-                            .available_width = screen_layout.available_width,
-                            .available_height = screen_layout.available_height - main_menu_layout.available_height,
-                            .padding = 5,
-                            .type = .column,
-                        };
+                const file_menu_click = components.clickable_label(ui, "File");
+                if (file_menu_click.is_clicked) {
+                    ui.opened_dropdown_menu = "File";
 
-                        try ui.pushLayout(&menu_dropdown_layout);
-                            try components.column(ui, "main_menu_dropdown");
-                            components.label(ui, "About...");
-                            components.label(ui, "Chooser");
-                        ui.popLayout();
-                    }
-                    components.label(ui, "Edit");
-                    components.label(ui, "Go");
+                    var file_menu_dropdown_layout = Layout {
+                        .id = "file_menu_dropdown_layout",
+                        .x = file_menu_click.rect.x,
+                        .y = file_menu_click.rect.y + file_menu_click.rect.height,
+                        .available_width = screen_layout.available_width,
+                        .available_height = screen_layout.available_height,
+                        .padding = 3,
+                        .gap = 5,
+                        .type = .column,
+                    };
+
+                    try components.column(ui, "file_menu_dropdown", file_menu_dropdown_layout);
+                    try ui.pushLayout(&file_menu_dropdown_layout);
+                        components.label(ui, "About...");
+                        components.label(ui, "Chooser");
+                    ui.popLayout();
+                }
+
+                const edit_menu_click = components.clickable_label(ui, "Edit");
+                if (edit_menu_click.is_clicked) {
+                    ui.opened_dropdown_menu = "Edit";
+
+                    var edit_menu_dropdown_layout = Layout {
+                        .id = "edit_menu_dropdown_layout",
+                        .x = edit_menu_click.rect.x,
+                        .y = edit_menu_click.rect.y + file_menu_click.rect.height,
+                        .available_width = screen_layout.available_width,
+                        .available_height = screen_layout.available_height - main_menu_layout.available_height,
+                        .padding = 3,
+                        .gap = 5,
+                        .type = .column,
+                    };
+
+                    try components.column(ui, "edit_menu_dropdown", edit_menu_dropdown_layout);
+                    try ui.pushLayout(&edit_menu_dropdown_layout);
+                        components.label(ui, "Row");
+                        components.label(ui, "Column");
+                        components.label(ui, "Shape");
+                    ui.popLayout();
+                }
+                components.label(ui, "Go");
             ui.popLayout();
         ui.popLayout();
     ui.popLayout();

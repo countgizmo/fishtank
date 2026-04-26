@@ -1,4 +1,5 @@
 const std = @import("std");
+const Tuple = std.meta.Tuple;
 const rl = @import("../raylib.zig").rl;
 const Primitives = @import("primitives.zig");
 const UiState = @import("state.zig").UiState;
@@ -6,6 +7,11 @@ const Layout = @import("state.zig").Layout;
 const Widget = @import("state.zig").Widget;
 const Rect = @import("state.zig").Rect;
 const WidgetFlags = @import("state.zig").WidgetFlags;
+
+const Click = struct {
+    rect: Rect,
+    is_clicked: bool,
+};
 
 pub fn screen(ui: *UiState ) void {
     const layout = ui.currentLayout();
@@ -107,26 +113,27 @@ pub fn checkRectCollision(rect: Rect, x: f32, y: f32) bool {
             (y >= rect.y and y <= rect.y + rect.height));
 }
 
-pub fn clickable_label(ui: *UiState, text: []const u8) bool {
+pub fn clickable_label(ui: *UiState, text: []const u8) Click {
     var widget = label_base_widget(ui, text);
     widget.flags = .{
         .has_text = true,
         .show_hover_effect = true,
     };
 
-    Primitives.render_widget(ui, widget);
 
     if (rl.IsMouseButtonReleased(rl.MOUSE_BUTTON_LEFT)) {
         const mouse = rl.GetMousePosition();
         if (checkRectCollision(widget.rect, mouse.x, mouse.y)) {
-            return true;
+            return .{ .rect = widget.rect, .is_clicked = true};
         }
     }
 
-    return false;
+    Primitives.render_widget(ui, widget);
+
+    return .{ .rect = widget.rect, .is_clicked = false};
 }
 
-pub fn row_start(ui: *UiState, id: []const u8, children_layout: Layout) !void {
+pub fn row(ui: *UiState, id: []const u8, children_layout: Layout) !void {
     const parent_layout = ui.currentLayout();
 
     // If the children are not yet registered, there's nothing to do
@@ -189,11 +196,13 @@ pub fn row_end(ui: *UiState) void {
     ui.popLayout();
 }
 
-pub fn column(ui: *UiState, id: []const u8) !void {
-    const layout = ui.currentLayout();
+
+// This component hugs the children.
+// If you need another behaviour make another fucking component!
+pub fn column(ui: *UiState, id: []const u8, children_layout: Layout) !void {
 
     // If the children are not yet registered, there's nothing to do
-    const children = ui.children_by_layout.get(layout.id) orelse return;
+    const children = ui.children_by_layout.get(children_layout.id) orelse return;
     if (children.items.len == 0) return;
 
     var max_width: f32 = 0;
@@ -201,9 +210,9 @@ pub fn column(ui: *UiState, id: []const u8) !void {
 
     for (children.items) |child| {
         if (ui.getFromCache(child)) |child_rect| {
-            sum_height += child_rect.height + (2 * layout.padding);
+            sum_height += child_rect.height + children_layout.gap;
 
-            const cur_width = child_rect.width + (2 * layout.padding);
+            const cur_width = child_rect.width;
             if (cur_width > max_width) {
                 max_width = cur_width;
             }
@@ -215,11 +224,14 @@ pub fn column(ui: *UiState, id: []const u8) !void {
         }
     }
 
+    const height = children_layout.padding + sum_height + children_layout.padding;
+    const width = children_layout.padding + max_width + children_layout.padding;
+
     const col_rect: Rect = .{
-        .x = layout.x,
-        .y = layout.y,
-        .height = sum_height,
-        .width = max_width + (2 * layout.padding),
+        .x = children_layout.x,
+        .y = children_layout.y,
+        .height = height,
+        .width = width,
     };
 
     const widget = Widget{
@@ -231,6 +243,10 @@ pub fn column(ui: *UiState, id: []const u8) !void {
     };
 
     Primitives.render_widget(ui, widget);
+
+    ui.registerAsChild(id) catch |err| {
+        std.log.err("Failed to register column as child with id = {s}: {}", .{id, err});
+    };
 }
 
 pub fn graphnode(ui: *UiState, x: i32, y: i32, text: []const u8) void {

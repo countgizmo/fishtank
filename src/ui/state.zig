@@ -50,34 +50,9 @@ pub const Layout = struct {
     available_width: f32,
     available_height: f32,
     padding: f32,
+    gap: f32 = 0,
     type: LayoutType = .free,
     id: []const u8,
-
-    // pub fn getXFloat(self: *Layout, width: f32) f32 {
-    //     const x = self.next_x;
-    //     if (self.type == .Row) {
-    //         self.next_x = x + width + self.gap;
-    //     }
-    //     return x;
-    // }
-    //
-    // pub fn getYFloat(self: *Layout, height: f32) f32 {
-    //     const y = self.next_y;
-    //     if (self.type == .Column) {
-    //         self.next_y = self.next_y + height + self.padding;
-    //     }
-    //     return y;
-    // }
-    //
-    // pub fn getWidth(self: *Layout) f32 {
-    //     return self.available_width - (self.padding * 2);
-    // }
-    //
-    // pub fn getHeight(self: *Layout) f32 {
-    //     return self.available_height - (self.padding * 2);
-    // }
-
-
 };
 
 pub const UiState = struct {
@@ -88,6 +63,7 @@ pub const UiState = struct {
     active_modal: ?ActiveModel = null,
     max_scroll: usize = 0,
     scroll_offset: f32 = 0,
+    opened_dropdown_menu: []const u8 = "",
 
     arena: std.heap.ArenaAllocator,
     layout_stack: ArrayList(*Layout) = .empty,
@@ -131,18 +107,19 @@ pub const UiState = struct {
         switch (layout.type) {
             .column, .free => return layout.x + layout.padding,
             .row => {
-                const children = self.children_by_layout.get(layout.id) orelse return layout.x + layout.padding;
-                if (children.items.len == 0) return layout.x + layout.padding;
+                var x_offset: f32 = 0;
 
-                var sum_width: f32 = 0;
-
-                for (children.items) |child| {
-                    if (self.getFromCache(child)) |child_rect| {
-                        sum_width += child_rect.width;
+                if (self.children_by_layout.get(layout.id)) |children| {
+                    if (children.items.len > 0) {
+                        for (children.items) |child| {
+                            if (self.getFromCache(child)) |child_rect| {
+                                x_offset += child_rect.width + layout.gap;
+                            }
+                        }
                     }
                 }
 
-                return layout.x + layout.padding +  sum_width + layout.padding;
+                return layout.x + layout.padding +  x_offset + layout.padding;
             },
         }
     }
@@ -157,21 +134,21 @@ pub const UiState = struct {
         switch (layout.type) {
             .row, .free => return layout.y + layout.padding,
             .column =>  {
-                const children = self.children_by_layout.get(layout.id) orelse return layout.y + layout.padding;
-                if (children.items.len == 0) return layout.y + layout.padding;
+                var y_offset: f32 = 0;
 
-                var sum_height: f32 = 0;
-
-                for (children.items) |child| {
-                    if (self.getFromCache(child)) |child_rect| {
-                        sum_height += child_rect.height;
+                if (self.children_by_layout.get(layout.id)) |children| {
+                    if (children.items.len > 0) {
+                        for (children.items) |child| {
+                            if (self.getFromCache(child)) |child_rect| {
+                                y_offset += child_rect.height + layout.gap;
+                            }
+                        }
                     }
                 }
 
-                return layout.y + layout.padding + sum_height + layout.padding;
+                return layout.y + layout.padding + y_offset + layout.padding;
             },
         }
-
     }
 
 
