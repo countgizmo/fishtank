@@ -103,7 +103,6 @@ pub fn main() !void {
 
         rl.EndDrawing();
 
-        ui.popLayout();
         ui.reset();
     }
 }
